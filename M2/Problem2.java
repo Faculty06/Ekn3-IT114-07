@@ -26,6 +26,7 @@ public class Problem2 extends BaseClass {
         // loop through the elements in the array
         // add each value to a variable called total
         // covert the string value to 2 decimal places
+        // then update it to modifiedTotal
     
 
         // Solve Challenge 1 here
