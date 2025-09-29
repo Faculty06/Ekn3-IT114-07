@@ -25,9 +25,9 @@ public class Problem1 extends BaseClass {
         for (int i = 0; i < arr.length; i++) {
             if (arr[i] % 2 == 1) {
                 if (!first){
-                    System.out.println(",");
+                    System.out.print(",");
                 }
-                System.out.println((arr[i]));
+                System.out.print((arr[i]));
                 first = false;     // for line 24 and 31, i got helped from the web to solve comma issue.
             }
         }
