@@ -15,6 +15,12 @@ public class Problem1 extends BaseClass {
         // Step 3: Add code to solve the problem (add/commit as needed)
         System.out.print("Output Array: ");
         // Start Solution Edits
+
+        // ekn3 09/23/2025. First, we have to loop through the arrays one at a time 
+        //and check if the intergers in the list is divisible by 2 with a remainder of 1.
+        //if its odd or not divisible with a remainder of 1, then we add to a list and print that list.  
+
+        //step 1: 
         
 
         // End Solution Edits
@@ -22,7 +28,7 @@ public class Problem1 extends BaseClass {
         System.out.println("______________________________________");
     }
     public static void main(String[] args) {
-        final String ucid = "mt85"; // <-- change to your UCID
+        final String ucid = "ekn3"; // <-- change to your UCID
         // no edits below this line
         printHeader(ucid, 1);
         printOdds(array1,1);

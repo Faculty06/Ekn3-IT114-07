@@ -42,7 +42,7 @@ public class Problem4 extends BaseClass {
     }
 
     public static void main(String[] args) {
-        final String ucid = "mt85"; // <-- change to your UCID
+        final String ucid = "ekn3"; // <-- change to your UCID
         // No edits below this line
         printHeader(ucid, 4);
 
