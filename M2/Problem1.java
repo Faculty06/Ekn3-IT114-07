@@ -21,7 +21,16 @@ public class Problem1 extends BaseClass {
         //if its odd or not divisible with a remainder of 1, then we add to a list and print that list.  
 
         //step 1: 
-        
+        boolean first = true;
+        for (int i = 0; i < arr.length; i++) {
+            if (arr[i] % 2 == 1) {
+                if (!first){
+                    System.out.println(",");
+                }
+                System.out.println((arr[i]));
+                first = false;     // for line 24 and 31, i got helped from the web to solve comma issue.
+            }
+        }
         
 
         // End Solution Edits
