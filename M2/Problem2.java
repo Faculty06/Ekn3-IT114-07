@@ -20,6 +20,14 @@ public class Problem2 extends BaseClass {
         // Step 3: Add code to solve the problem (add/commit as needed)
         double total = 0;
         // Start Solution Edits
+
+        //ekn3 29/09/25
+
+        // loop through the elements in the array
+        // add each value to a variable called total
+        // covert the string value to 2 decimal places
+    
+
         // Solve Challenge 1 here
         
       
