@@ -22,6 +22,7 @@ public class Problem1 extends BaseClass {
 
         //step 1: 
         
+        
 
         // End Solution Edits
         System.out.println("");
