@@ -17,7 +17,45 @@ public class Problem3 extends BaseClass {
         // Step 3: Add code to solve the problem (add/commit as needed)
         Object[] output = new Object[arr.length];
         // Start Solution Edits
+
+
+        //ekn3 09/29/2025
+        //Loop through each elemnets 
+        //check its match or type
+        //convert to positive
+        //convert back to original form and update in output
         
+        //step1
+        for (int i =0; i < arr.length; i++){
+            Object val = arr [i];
+            if (val instanceof Integer) {
+                output[i] = Math.abs((Integer)val);
+            }
+            else if (val instanceof Double){
+                output [i] = Math.abs((Double)val);
+            }
+            else if (val instanceof Float){
+                output [i] =Math.abs((Float)val);
+            }
+            else if (val instanceof String){
+                String str =(String) val;
+                if (str.matches("-?\\d+(\\.\\d+)?")) { // got helped by researching and honestly still dont understand this.
+                    double num = Double.parseDouble(str);
+                    output[i] = String.valueOf(Math.abs(num));
+                } else {
+                    output[i] = str; 
+                }
+            } else{
+                output[i] = val;
+            }
+
+
+                
+            }
+
+
+        
+
 
         // End Solution Edits
         System.out.println("Output: ");
