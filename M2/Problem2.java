@@ -30,10 +30,12 @@ public class Problem2 extends BaseClass {
     
 
         // Solve Challenge 1 here
-        
+        for (int i = 0; i < arr.length; i++) {
+            total += arr[i];
+        }
       
         // Solve Challenge 2 here
-        Object modifiedTotal = "?";
+        Object modifiedTotal = String.format("%.2f", total);
 
         // End Solution Edits
         System.out.println("Total Raw Value: " +total);
