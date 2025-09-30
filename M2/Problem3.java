@@ -25,7 +25,7 @@ public class Problem3 extends BaseClass {
         //convert to positive
         //convert back to original form and update in output
         
-        //step1
+        //steps
         for (int i =0; i < arr.length; i++){
             Object val = arr [i];
             if (val instanceof Integer) {
@@ -48,9 +48,7 @@ public class Problem3 extends BaseClass {
             } else{
                 output[i] = val;
             }
-
-
-                
+               
             }
 
 

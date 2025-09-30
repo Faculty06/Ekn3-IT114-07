@@ -30,6 +30,17 @@ public class Problem4 extends BaseClass {
         
         for(int i = 0; i <arr.length; i++){
             // Start Solution Edits
+            //loop through the arrays and remove non-alphanumeric keys
+            //Covert the clean strings Title case 
+            // Extact middle 3 characters and print
+                        
+            
+
+
+
+
+
+
             
              // End Solution Edits
             System.out.println(String.format("Index[%d] \"%s\" | Middle: \"%s\"",i, placeholderForModifiedPhrase, placeholderForMiddleCharacters));
