@@ -249,7 +249,7 @@ public class ServerThread extends Thread {
 
                     default:
                         break;
-                
+                }
             }
 
         }
@@ -266,5 +266,6 @@ public class ServerThread extends Thread {
             info("Client already closed");
         }
         info("ServerThread cleanup() end");
+       
     }
 }
