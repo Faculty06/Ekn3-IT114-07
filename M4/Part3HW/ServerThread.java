@@ -230,9 +230,26 @@ public class ServerThread extends Thread {
                         wasCommand = true;
                         break;
 
+                    //challenge 3
+                    case "shuffle":
+                        if (commandData.length < 3) {
+                            info("Invalid shuffle command received (expected: trigger,shuffle,message)");
+                            wasCommand = true; // treat as handled so it does not become a broadcast
+                            break;
+                        }
+                        String shuffleMessage = String.join(",", Arrays.copyOfRange(commandData, 2, commandData.length)).trim();
+                        if (shuffleMessage.isEmpty()) {
+                            info("Invalid shuffle command: missing message");
+                            wasCommand = true;
+                            break;
+                        }
+                        server.handleShuffle(this, shuffleMessage);
+                        wasCommand = true;
+                        break;
+
                     default:
                         break;
-                }
+                
             }
 
         }

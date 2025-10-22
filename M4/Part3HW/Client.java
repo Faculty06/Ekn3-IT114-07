@@ -122,9 +122,27 @@ public class Client {
         String[] commandData = { Constants.COMMAND_TRIGGER, "pm", targetId, message };
         sendToServer(String.join(",", commandData));
         wasCommand = true;
+        return wasCommand;        
+    }
+
+    //ekn3 challenge 3
+    if (text.equalsIgnoreCase("/shuffle") || text.equalsIgnoreCase("shuffle")) {
+        System.out.println("Usage: /shuffle <message>");
+        return true;
+    }
+    if (text.toLowerCase().startsWith("/shuffle ") || text.toLowerCase().startsWith("shuffle ")) {
+        String payload = text.replaceFirst("(?i)^/?shuffle\\s+", "");
+        String message = payload.trim();
+        if (message.isEmpty()) {
+            System.out.println("Usage: /shuffle <message>");
+            return true;
+        }
+        String[] commandData = { Constants.COMMAND_TRIGGER, "shuffle", message };
+        sendToServer(String.join(",", commandData));
+        wasCommand = true;
         return wasCommand;
     }
-    
+
         else if (isConnection(text)) {
             // replaces multiple spaces with a single space
             // splits on the space after connect (gives us host and port)

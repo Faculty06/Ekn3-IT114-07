@@ -152,6 +152,24 @@ public class Server {
     protected synchronized void handleMessage(ServerThread sender, String text) {
         relay(sender, text);
     }
+    //challenge 3
+    protected synchronized void handleShuffle(ServerThread sender, String message) {
+    // shuffle characters
+    char[] chars = message.toCharArray();
+    java.util.Random rnd = new java.util.Random();
+    for (int i = chars.length - 1; i > 0; i--) {
+        int j = rnd.nextInt(i + 1);
+        char tmp = chars[i];
+        chars[i] = chars[j];
+        chars[j] = tmp;
+    }
+    String shuffled = new String(chars);
+    String who = sender == null ? "Server" : String.format("User[%s]", sender.getClientId());
+    String formatted = String.format("Server: Shuffled from %s: %s", who, shuffled);   
+    relay(null, String.format("Shuffled from %s: %s", who, shuffled));
+}
+
+
     // end handle actions
 
     public static void main(String[] args) {
