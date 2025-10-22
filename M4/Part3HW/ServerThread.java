@@ -206,6 +206,30 @@ public class ServerThread extends Thread {
                         server.handleFlip(this);
                         wasCommand = true;
                         break;
+                        //challenge 2
+                    case "pm":
+   
+                        if (commandData.length < 4) {
+                            info("Invalid pm command received (expected: trigger,pm,targetId,message)");
+                            wasCommand = true; 
+                            break;
+                        }
+                        String targetIdStr = commandData[2].trim();
+                        String privateMessage = String.join(",", Arrays.copyOfRange(commandData, 3, commandData.length)).trim();
+                        if (targetIdStr.isEmpty() || privateMessage.isEmpty()) {
+                            info("Invalid pm command: missing target or message");
+                            wasCommand = true;
+                            break;
+                        }
+                        try {
+                            long targetId = Long.parseLong(targetIdStr);
+                            server.handlePrivateMessage(this, targetId, privateMessage);
+                        } catch (NumberFormatException nfe) {
+                            info("Invalid pm target id: " + targetIdStr);
+                        }
+                        wasCommand = true;
+                        break;
+
                     default:
                         break;
                 }

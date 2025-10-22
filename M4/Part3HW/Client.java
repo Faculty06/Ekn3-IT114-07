@@ -109,7 +109,22 @@ public class Client {
             sendToServer(String.join(",",commandData));
             wasCommand = true;
         }
-
+        // check for pm command 
+    if (text.toLowerCase().startsWith("/pm ") || text.toLowerCase().startsWith("pm ")) {
+        String payload = text.replaceFirst("(?i)^/?pm\\s+", ""); 
+        String[] parts = payload.split(" ", 2); 
+        if (parts.length < 2 || parts[0].trim().isEmpty() || parts[1].trim().isEmpty()) {
+            System.out.println("Usage: /pm <target id> <message>");
+            return true;
+        }
+        String targetId = parts[0].trim();
+        String message = parts[1].trim();
+        String[] commandData = { Constants.COMMAND_TRIGGER, "pm", targetId, message };
+        sendToServer(String.join(",", commandData));
+        wasCommand = true;
+        return wasCommand;
+    }
+    
         else if (isConnection(text)) {
             // replaces multiple spaces with a single space
             // splits on the space after connect (gives us host and port)

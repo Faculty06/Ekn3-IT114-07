@@ -126,6 +126,19 @@ public class Server {
     protected synchronized void handleDisconnect(ServerThread sender) {
         disconnect(sender);
     }
+        //challenge 2
+    protected synchronized void handlePrivateMessage(ServerThread sender, long targetId, String message) {
+    ServerThread recipient = connectedClients.get(targetId);
+    if (recipient == null) {
+        // inform sender that target was not found
+        sender.sendToClient("Server: User[" + targetId + "] not found or disconnected");
+        return;
+    }
+    String formatted = String.format("PM from User[%s]: %s", sender.getClientId(), message);
+    // send only to recipient and optionally echo to sender
+    recipient.sendToClient(formatted);
+    sender.sendToClient("PM to User[" + targetId + "]: " + message);
+}
 
     protected synchronized void handleReverseText(ServerThread sender, String text) {
         StringBuilder sb = new StringBuilder(text);
