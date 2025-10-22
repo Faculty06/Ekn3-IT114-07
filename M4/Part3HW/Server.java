@@ -1,4 +1,4 @@
-package M4.Part3;
+package M4.Part3HW;
 
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -116,6 +116,13 @@ public class Server {
      * 
      * @param serverThread
      */
+    //ekn3 10-12-25
+    protected synchronized void handleFlip(ServerThread sender){
+        String who = sender == null ? "Server" :String.format("User[%s]",sender.getClientId());
+        String result = Math.random() < 0.5 ? "heads" : "tails";
+        String message = String.format("%s flipped a coin and got %s",who,result);
+        relay(null, message);
+    }
     protected synchronized void handleDisconnect(ServerThread sender) {
         disconnect(sender);
     }

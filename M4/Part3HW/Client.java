@@ -1,4 +1,4 @@
-package M4.Part3;
+package M4.Part3HW;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
@@ -10,7 +10,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import M4.Part3.TextFX.Color;
+import M4.Part3HW.TextFX.Color;
 
 /**
  * Demoing bi-directional communication between client and server in a
@@ -98,9 +98,19 @@ public class Client {
      * @return true if the text was a command or triggered a command
      * @throws IOException
      */
+
+     //ekn3 10-21-25
     private boolean processClientCommand(String text) throws IOException {
         boolean wasCommand = false;
-        if (isConnection(text)) {
+        if (text == null) return false;
+        text = text.trim();
+        if ("/flip".equalsIgnoreCase(text) || "flip".equalsIgnoreCase(text)){
+            String[] commandData ={Constants.COMMAND_TRIGGER, "flip"};
+            sendToServer(String.join(",",commandData));
+            wasCommand = true;
+        }
+
+        else if (isConnection(text)) {
             // replaces multiple spaces with a single space
             // splits on the space after connect (gives us host and port)
             // splits on : to get host as index 0 and port as index 1

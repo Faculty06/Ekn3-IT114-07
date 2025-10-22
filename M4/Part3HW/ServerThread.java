@@ -1,4 +1,4 @@
-package M4.Part3;
+package M4.Part3HW;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
@@ -7,8 +7,7 @@ import java.net.Socket;
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.function.Consumer;
-
-import M4.Part3.TextFX.Color;
+import M4.Part3HW.TextFX.Color;
 
 /**
  * A server-side representation of a single client
@@ -201,7 +200,12 @@ public class ServerThread extends Thread {
                         server.handleReverseText(this, relevantText);
                         wasCommand = true;
                         break;
-                    // added more cases/breaks as needed for other commands
+                     // added more cases/breaks as needed for other commands
+                     //ekn3 10-12-25 
+                    case "flip":
+                        server.handleFlip(this);
+                        wasCommand = true;
+                        break;
                     default:
                         break;
                 }
