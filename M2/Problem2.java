@@ -20,11 +20,22 @@ public class Problem2 extends BaseClass {
         // Step 3: Add code to solve the problem (add/commit as needed)
         double total = 0;
         // Start Solution Edits
+
+        //ekn3 29/09/25
+
+        // loop through the elements in the array
+        // add each value to a variable called total
+        // covert the string value to 2 decimal places
+        // then update it to modifiedTotal
+    
+
         // Solve Challenge 1 here
-        
+        for (int i = 0; i < arr.length; i++) {
+            total += arr[i];
+        }
       
         // Solve Challenge 2 here
-        Object modifiedTotal = "?";
+        Object modifiedTotal = String.format("%.2f", total);
 
         // End Solution Edits
         System.out.println("Total Raw Value: " +total);
@@ -34,7 +45,7 @@ public class Problem2 extends BaseClass {
     }
 
     public static void main(String[] args) {
-        final String ucid = "mt85"; // <-- change to your UCID
+        final String ucid = "ekn3"; // <-- change to your UCID
         // no edits below this line
         printHeader(ucid, 2);
         sumValues(array1, 1);

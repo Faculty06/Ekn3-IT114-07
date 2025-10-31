@@ -30,7 +30,41 @@ public class Problem4 extends BaseClass {
         
         for(int i = 0; i <arr.length; i++){
             // Start Solution Edits
-            
+            //loop through the arrays and remove non-alphanumeric keys
+            //Covert the clean strings Title case 
+            // Extact middle 3 characters and print
+                        
+            String original = arr[i];
+
+            // Step 1: 
+            String cleaned = original.replaceAll("[^a-zA-Z0-9 ]", "");
+
+            // Step 2: 
+            cleaned = cleaned.trim().replaceAll(" +", " ");
+
+            // Step 3: 
+            String[] words = cleaned.split(" ");
+            StringBuilder titleCase = new StringBuilder();
+            for (String word : words) {
+                if (word.length() > 0) {
+                    titleCase.append(Character.toUpperCase(word.charAt(0)));
+                    titleCase.append(word.substring(1).toLowerCase());
+                    titleCase.append(" ");
+                }
+            }
+            placeholderForModifiedPhrase = titleCase.toString().trim();
+
+            // Step 4: 
+            int len = placeholderForModifiedPhrase.length();
+            if (len < 3) {
+                placeholderForMiddleCharacters = "Not enough characters";
+            } else {
+                int mid = len / 2 - 1;
+                if (mid < 0) mid = 0;
+                if (mid + 3 > len) mid = len - 3;
+                placeholderForMiddleCharacters = placeholderForModifiedPhrase.substring(mid, mid + 3);
+            }
+                        
              // End Solution Edits
             System.out.println(String.format("Index[%d] \"%s\" | Middle: \"%s\"",i, placeholderForModifiedPhrase, placeholderForMiddleCharacters));
         }
@@ -42,7 +76,7 @@ public class Problem4 extends BaseClass {
     }
 
     public static void main(String[] args) {
-        final String ucid = "mt85"; // <-- change to your UCID
+        final String ucid = "ekn3"; // <-- change to your UCID
         // No edits below this line
         printHeader(ucid, 4);
 
