@@ -3,7 +3,7 @@ package Projects;
 import java.net.Socket;
 import java.util.Objects;
 import java.util.function.Consumer;
-import M5.Part5.TextFX.Color;
+import Projects.TextFX.Color;
 
 /**
  * A server-side representation of a single client

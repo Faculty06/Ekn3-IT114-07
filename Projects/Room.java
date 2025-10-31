@@ -2,7 +2,7 @@ package Projects;
 
 import java.util.concurrent.ConcurrentHashMap;
 
-import M5.Part5.TextFX.Color;
+import Projects.TextFX.Color;
 
 public class Room implements AutoCloseable {
     private final String name;// unique name of the Room
@@ -204,7 +204,7 @@ public class Room implements AutoCloseable {
                     Server.INSTANCE.joinRoom(Room.LOBBY, client);
                 } catch (RoomNotFoundException e) {
                     e.printStackTrace();
-                    // TODO, fill in, this shouldn't happen though
+                    // todo, fill in, this shouldn't happen though
                 }
                 return true;
             });
