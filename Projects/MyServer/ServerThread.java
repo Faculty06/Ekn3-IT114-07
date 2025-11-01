@@ -1,9 +1,16 @@
-package Projects;
+package Projects.MyServer;
 
 import java.net.Socket;
 import java.util.Objects;
 import java.util.function.Consumer;
-import Projects.TextFX.Color;
+
+import Projects.CommonFiles.ConnectionPayload;
+import Projects.CommonFiles.Constants;
+import Projects.CommonFiles.Payload;
+import Projects.CommonFiles.PayloadType;
+import Projects.CommonFiles.RoomAction;
+import Projects.CommonFiles.TextFX;
+import Projects.CommonFiles.TextFX.Color;
 
 /**
  * A server-side representation of a single client

@@ -1,11 +1,14 @@
-package Projects;
+package Projects.MyServer;
 
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.concurrent.ConcurrentHashMap;
 
-import Projects.TextFX.Color;
+import Projects.CommonFiles.TextFX;
+import Projects.CommonFiles.TextFX.Color;
+import Projects.Exceptions.DuplicateRoomException;
+import Projects.Exceptions.RoomNotFoundException;
 
 public enum Server {
     INSTANCE; // Singleton instance
@@ -51,6 +54,8 @@ public enum Server {
         // server listening
         info("Listening on port " + this.port);
         // Simplified client connection loop
+
+        //ekn3 10-31-25
         try (ServerSocket serverSocket = new ServerSocket(port)) {
             createRoom(Room.LOBBY);// create the first room (lobby)
             while (isRunning) {

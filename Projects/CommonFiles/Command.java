@@ -1,7 +1,7 @@
-package Projects;
+package Projects.CommonFiles;
 
 import java.util.HashMap;
-
+//ekn3 11/1/2025
 public enum Command {
     QUIT("quit"),
     DISCONNECT("disconnect"),

@@ -1,9 +1,11 @@
-package Projects;
+package Projects.MyServer;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
+
+import Projects.CommonFiles.Payload;
 
 /**
  * Base class the handles the underlying connection between Client and

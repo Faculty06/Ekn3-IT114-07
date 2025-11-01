@@ -1,4 +1,4 @@
-package Projects;
+package Projects.CommonFiles;
 
 /**
  * Utility to attempt to provide colored text in the terminal.

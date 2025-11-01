@@ -1,4 +1,4 @@
-package Projects;
+package Projects.Exceptions;
 
 public class RoomNotFoundException extends CustomIT114Exception {
 

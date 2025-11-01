@@ -1,4 +1,4 @@
-package Projects;
+package Projects.CommonFiles;
 
 public class ConnectionPayload extends Payload {
     private String clientName;
