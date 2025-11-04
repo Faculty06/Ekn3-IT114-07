@@ -105,6 +105,9 @@ public abstract class BaseServerThread extends Thread {
      * @param payload
      * @return true if no errors were encountered
      */
+
+
+     //ekn3 10/29/25
     protected boolean sendToClient(Payload payload) {
         if (!isRunning) {
             return true;

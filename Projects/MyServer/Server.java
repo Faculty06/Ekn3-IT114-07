@@ -86,6 +86,7 @@ public enum Server {
      * 
      * @param serverThread
      */
+    //ekn3 10/30/25
     private void onServerThreadInitialized(ServerThread serverThread) {
         // Generate Server controlled clientId
         nextClientId = Math.max(++nextClientId, 1);
@@ -109,6 +110,8 @@ public enum Server {
      * @return true if it was created and false if it wasn't
      * @throws DuplicateRoomException
      */
+
+     //ekn3 10/29/25
     protected void createRoom(String name) throws DuplicateRoomException {
         final String nameCheck = name.toLowerCase();
         if (rooms.containsKey(nameCheck)) {
@@ -118,8 +121,7 @@ public enum Server {
         rooms.put(nameCheck, room);
         info(String.format("Created new Room %s", name));
     }
-
-    /**
+   /**
      * Attempts to move a client (ServerThread) between rooms
      * 
      * @param name   the target room to join

@@ -108,6 +108,7 @@ public class ServerThread extends BaseServerThread {
      * 
      * @return true for successful send
      */
+    //ekn3 10/30/25
     protected boolean sendClientId() {
         ConnectionPayload payload = new ConnectionPayload();
         payload.setPayloadType(PayloadType.CLIENT_ID);
@@ -124,6 +125,7 @@ public class ServerThread extends BaseServerThread {
      * @param message
      * @return true for successful send
      */
+    //ekn3 11/02/25
     protected boolean sendMessage(long clientId, String message) {
         Payload payload = new Payload();
         payload.setPayloadType(PayloadType.MESSAGE);
@@ -133,6 +135,7 @@ public class ServerThread extends BaseServerThread {
     }
 
     // End Send*() Methods
+    //ekn3 10/30/25
     @Override
     protected void processPayload(Payload incoming) {
 
