@@ -195,6 +195,7 @@ public enum Client {
      * @param roomAction (join, leave, create)
      * @throws IOException
      */
+    //ekn3 10/30/25
     private void sendRoomAction(String roomName, RoomAction roomAction) throws IOException {
         Payload payload = new Payload();
         payload.setMessage(roomName);
@@ -234,6 +235,7 @@ public enum Client {
      * 
      * @throws IOException
      */
+    //ekn3 11/03/25
     private void sendDisconnect() throws IOException {
         Payload payload = new Payload();
         payload.setPayloadType(PayloadType.DISCONNECT);

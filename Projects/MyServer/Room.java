@@ -113,6 +113,8 @@ public class Room implements AutoCloseable {
      * @param sender  ServerThread (client) sending the message or null if it's a
      *                server-generated message
      */
+
+     //ekn3 11/02/25
     protected synchronized void relay(ServerThread sender, String message) {
         if (!isRunning) { // block action if Room isn't running
             return;
@@ -260,7 +262,7 @@ public class Room implements AutoCloseable {
         String rev = sb.toString();
         relay(sender, rev);
     }
-
+//ekn3 11/2/25
     protected synchronized void handleMessage(ServerThread sender, String text) {
         relay(sender, text);
     }
