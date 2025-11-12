@@ -7,7 +7,7 @@ tmp/
 .metadata
 .classpath
 .project
-*.tmp
+*.tmpg
 *.bak
 *.swp
 *~.nib
