@@ -1,4 +1,4 @@
-package Projects.MyServer;
+package Projects.Server;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
@@ -6,13 +6,12 @@ import java.io.ObjectOutputStream;
 import java.net.Socket;
 
 import Projects.CommonFiles.Payload;
+import Projects.CommonFiles.User;
 
 /**
  * Base class the handles the underlying connection between Client and
  * Server-side
  */
-
- //ekn3 10/29/25
 public abstract class BaseServerThread extends Thread {
 
     protected boolean isRunning = false; // control variable to stop this thread
@@ -109,7 +108,6 @@ public abstract class BaseServerThread extends Thread {
      * @param payload
      * @return true if no errors were encountered
      */
-    //ekn3 11/02/25
     protected boolean sendToClient(Payload payload) {
         if (!isRunning) {
             return true;

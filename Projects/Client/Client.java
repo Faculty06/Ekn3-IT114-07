@@ -18,12 +18,10 @@ import Projects.CommonFiles.Constants;
 import Projects.CommonFiles.LoggerUtil;
 import Projects.CommonFiles.Payload;
 import Projects.CommonFiles.PayloadType;
-import Projects.CommonFiles.Phase;
-import Projects.CommonFiles.ReadyPayload;
 import Projects.CommonFiles.RoomAction;
 import Projects.CommonFiles.RoomResultPayload;
 import Projects.CommonFiles.TextFX;
-import Projects.CommonFiles.user;
+import Projects.CommonFiles.User;
 import Projects.CommonFiles.TextFX.Color;
 
 /**
@@ -51,7 +49,6 @@ public enum Client {
     private volatile boolean isRunning = true; // volatile for thread-safe visibility
     private final ConcurrentHashMap<Long, User> knownClients = new ConcurrentHashMap<Long, User>();
     private User myUser = new User();
-    private Phase currentPhase = Phase.READY;
 
     private void error(String message) {
         LoggerUtil.INSTANCE.severe(TextFX.colorize(String.format("%s", message), Color.RED));
@@ -151,8 +148,7 @@ public enum Client {
             } else if (text.startsWith(Command.NAME.command)) {
                 text = text.replace(Command.NAME.command, "").trim();
                 if (text == null || text.length() == 0) {
-                    LoggerUtil.INSTANCE
-                            .warning(TextFX.colorize("This command requires a name as an argument", Color.RED));
+                    LoggerUtil.INSTANCE.warning(TextFX.colorize("This command requires a name as an argument", Color.RED));
                     return true;
                 }
                 myUser.setClientName(text);// temporary until we get a response from the server
@@ -160,16 +156,11 @@ public enum Client {
                         Color.YELLOW));
                 wasCommand = true;
             } else if (text.equalsIgnoreCase(Command.LIST_USERS.command)) {
-                String message = TextFX.colorize("Known clients:\n", Color.CYAN);
                 LoggerUtil.INSTANCE.info(TextFX.colorize("Known clients:", Color.CYAN));
-                message += String.join("\n", knownClients.values().stream()
-                        .map(c -> String.format("%s %s %s %s",
-                                c.getDisplayName(),
-                                c.getClientId() == myUser.getClientId() ? " (you)" : "",
-                                c.isReady() ? "[x]" : "[ ]",
-                                c.didTakeTurn() ? "[T]" : "[ ]"))
-                        .toList());
-                LoggerUtil.INSTANCE.info(message);
+                knownClients.forEach((key, value) -> {
+                    LoggerUtil.INSTANCE.info(TextFX.colorize(String.format("%s%s", value.getDisplayName(),
+                            key == myUser.getClientId() ? " (you)" : ""), Color.CYAN));
+                });
                 wasCommand = true;
             } else if (Command.QUIT.command.equalsIgnoreCase(text)) {
                 close();
@@ -184,8 +175,7 @@ public enum Client {
             } else if (text.startsWith(Command.CREATE_ROOM.command)) {
                 text = text.replace(Command.CREATE_ROOM.command, "").trim();
                 if (text == null || text.length() == 0) {
-                    LoggerUtil.INSTANCE
-                            .warning(TextFX.colorize("This command requires a room name as an argument", Color.RED));
+                    LoggerUtil.INSTANCE.warning(TextFX.colorize("This command requires a room name as an argument", Color.RED));
                     return true;
                 }
                 sendRoomAction(text, RoomAction.CREATE);
@@ -193,8 +183,7 @@ public enum Client {
             } else if (text.startsWith(Command.JOIN_ROOM.command)) {
                 text = text.replace(Command.JOIN_ROOM.command, "").trim();
                 if (text == null || text.length() == 0) {
-                    LoggerUtil.INSTANCE
-                            .warning(TextFX.colorize("This command requires a room name as an argument", Color.RED));
+                    LoggerUtil.INSTANCE.warning(TextFX.colorize("This command requires a room name as an argument", Color.RED));
                     return true;
                 }
                 sendRoomAction(text, RoomAction.JOIN);
@@ -209,42 +198,12 @@ public enum Client {
 
                 sendRoomAction(text, RoomAction.LIST);
                 wasCommand = true;
-            } else if (text.equalsIgnoreCase(Command.READY.command)) {
-                sendReady();
-                wasCommand = true;
-            } else if (text.startsWith(Command.EXAMPLE_TURN.command)) {
-                text = text.replace(Command.EXAMPLE_TURN.command, "").trim();
-
-                sendDoTurn(text);
-                wasCommand = true;
             }
         }
         return wasCommand;
     }
 
     // Start Send*() methods
-    private void sendDoTurn(String text) throws IOException {
-        // NOTE for now using ReadyPayload as it has the necessary properties
-        // An actual turn may include other data for your project
-        ReadyPayload rp = new ReadyPayload();
-        rp.setPayloadType(PayloadType.TURN);
-        rp.setReady(true); // <- technically not needed as we'll use the payload type as a trigger
-        rp.setMessage(text);
-        sendToServer(rp);
-    }
-
-    /**
-     * Sends the client's intent to be ready.
-     * Can also be used to toggle the ready state if coded on the server-side
-     * 
-     * @throws IOException
-     */
-    private void sendReady() throws IOException {
-        ReadyPayload rp = new ReadyPayload();
-        // rp.setReady(true); // <- technically not needed as we'll use the payload type
-        // as a trigger
-        sendToServer(rp);
-    }
 
     /**
      * Sends a room action to the server
@@ -270,7 +229,7 @@ public enum Client {
                 payload.setPayloadType(PayloadType.ROOM_LIST);
                 break;
             default:
-                LoggerUtil.INSTANCE.warning(TextFX.colorize("Invalid room action", Color.RED));
+            LoggerUtil.INSTANCE.warning(TextFX.colorize("Invalid room action", Color.RED));
                 break;
         }
         sendToServer(payload);
@@ -364,15 +323,13 @@ public enum Client {
                 }
             }
         } catch (ClassCastException | ClassNotFoundException cce) {
-            LoggerUtil.INSTANCE.severe("Error reading object as specified type:", cce);
-            // cce.printStackTrace();
+            LoggerUtil.INSTANCE.severe("Error reading object as specified type:",cce);
+            //cce.printStackTrace();
         } catch (IOException e) {
             if (isRunning) {
                 LoggerUtil.INSTANCE.warning("Connection dropped");
                 e.printStackTrace();
             }
-        } catch (Exception e) {
-            LoggerUtil.INSTANCE.severe("Unexpected error in listenToServer()", e);
         } finally {
             closeServerConnection();
         }
@@ -409,92 +366,14 @@ public enum Client {
             case ROOM_LIST:
                 processRoomsList(payload);
                 break;
-            case PayloadType.READY:
-                processReadyStatus(payload, false);
-                break;
-            case PayloadType.SYNC_READY:
-                processReadyStatus(payload, true);
-                break;
-            case PayloadType.RESET_READY:
-                // note no data necessary as this is just a trigger
-                processResetReady();
-                break;
-            case PayloadType.PHASE:
-                processPhase(payload);
-                break;
-            case PayloadType.TURN:
-            case PayloadType.SYNC_TURN:
-                processTurn(payload);
-                break;
-            case PayloadType.RESET_TURN:
-                // note no data necessary as this is just a trigger
-                processResetTurn();
-                break;
             default:
-                LoggerUtil.INSTANCE.warning(TextFX.colorize("Unhandled payload type", Color.YELLOW));
+            LoggerUtil.INSTANCE.warning(TextFX.colorize("Unhandled payload type", Color.YELLOW));
                 break;
 
         }
     }
 
     // Start process*() methods
-    private void processResetTurn() {
-        knownClients.values().forEach(cp -> cp.setTookTurn(false));
-        System.out.println("Turn status reset for everyone");
-    }
-
-    private void processTurn(Payload payload) {
-        // Note: For now assuming ReadyPayload (this may be changed later)
-        if (!(payload instanceof ReadyPayload)) {
-            error("Invalid payload subclass for processTurn");
-            return;
-        }
-        ReadyPayload rp = (ReadyPayload) payload;
-        if (!knownClients.containsKey(rp.getClientId())) {
-            LoggerUtil.INSTANCE.severe(String.format("Received turn status for client id %s who is not known",
-                    rp.getClientId()));
-            return;
-        }
-        User cp = knownClients.get(rp.getClientId());
-        cp.setTookTurn(rp.isReady());
-        if (payload.getPayloadType() != PayloadType.SYNC_TURN) {
-            String message = String.format("%s %s their turn", cp.getDisplayName(),
-                    cp.didTakeTurn() ? "took" : "reset");
-            LoggerUtil.INSTANCE.info(message);
-        }
-
-    }
-
-    private void processPhase(Payload payload) {
-        currentPhase = Enum.valueOf(Phase.class, payload.getMessage());
-        System.out.println(TextFX.colorize("Current phase is " + currentPhase.name(), Color.YELLOW));
-    }
-
-    private void processResetReady() {
-        knownClients.values().forEach(cp -> cp.setReady(false));
-        System.out.println("Ready status reset for everyone");
-    }
-
-    private void processReadyStatus(Payload payload, boolean isQuiet) {
-        if (!(payload instanceof ReadyPayload)) {
-            error("Invalid payload subclass for processRoomsList");
-            return;
-        }
-        ReadyPayload rp = (ReadyPayload) payload;
-        if (!knownClients.containsKey(rp.getClientId())) {
-            LoggerUtil.INSTANCE.severe(String.format("Received ready status [%s] for client id %s who is not known",
-                    rp.isReady() ? "ready" : "not ready", rp.getClientId()));
-            return;
-        }
-        User cp = knownClients.get(rp.getClientId());
-        cp.setReady(rp.isReady());
-        if (!isQuiet) {
-            System.out.println(
-                    String.format("%s is %s", cp.getDisplayName(),
-                            rp.isReady() ? "ready" : "not ready"));
-        }
-    }
-
     private void processRoomsList(Payload payload) {
         if (!(payload instanceof RoomResultPayload)) {
             error("Invalid payload subclass for processRoomsList");
@@ -510,7 +389,7 @@ public enum Client {
         }
         LoggerUtil.INSTANCE.info(TextFX.colorize("Room Results:", Color.PURPLE));
         LoggerUtil.INSTANCE.info(
-                String.join(System.lineSeparator(), rooms));
+                String.join("\n", rooms));
     }
 
     private void processClientData(Payload payload) {
@@ -532,9 +411,8 @@ public enum Client {
         } else if (knownClients.containsKey(payload.getClientId())) {
             User disconnectedUser = knownClients.remove(payload.getClientId());
             if (disconnectedUser != null) {
-                LoggerUtil.INSTANCE
-                        .info(TextFX.colorize(String.format("%s disconnected", disconnectedUser.getDisplayName()),
-                                Color.RED));
+                LoggerUtil.INSTANCE.info(TextFX.colorize(String.format("%s disconnected", disconnectedUser.getDisplayName()),
+                        Color.RED));
             }
         }
 
@@ -606,8 +484,8 @@ public enum Client {
                 }
             }
         } catch (IOException ioException) {
-            LoggerUtil.INSTANCE.severe("Error in listenToInput()", ioException);
-            // ioException.printStackTrace();
+            LoggerUtil.INSTANCE.severe("Error in listentToInput()",ioException);
+            //ioException.printStackTrace();
         }
         LoggerUtil.INSTANCE.info("listenToInput thread stopped");
     }
@@ -650,7 +528,7 @@ public enum Client {
             }
         } catch (IOException e) {
             e.printStackTrace();
-            // LoggerUtil.INSTANCE.severe("Socket Error", e);
+            //LoggerUtil.INSTANCE.severe("Socket Error", e);
         }
     }
 

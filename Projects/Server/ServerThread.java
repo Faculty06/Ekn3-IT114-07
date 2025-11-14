@@ -1,14 +1,17 @@
-package Projects.MyServer;
+package Projects.Server;
 
 import java.net.Socket;
+import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
 
 import Projects.CommonFiles.ConnectionPayload;
 import Projects.CommonFiles.Constants;
+import Projects.CommonFiles.LoggerUtil;
 import Projects.CommonFiles.Payload;
 import Projects.CommonFiles.PayloadType;
 import Projects.CommonFiles.RoomAction;
+import Projects.CommonFiles.RoomResultPayload;
 import Projects.CommonFiles.TextFX;
 import Projects.CommonFiles.TextFX.Color;
 
@@ -24,8 +27,10 @@ public class ServerThread extends BaseServerThread {
      * 
      * @param message
      */
+    @Override
     protected void info(String message) {
-        System.out.println(TextFX.colorize(String.format("Thread[%s]: %s", this.getClientId(), message), Color.CYAN));
+        LoggerUtil.INSTANCE
+                .info(TextFX.colorize(String.format("Thread[%s]: %s", this.getClientId(), message), Color.CYAN));
     }
 
     /**
@@ -49,6 +54,12 @@ public class ServerThread extends BaseServerThread {
     }
 
     // Start Send*() Methods
+    public boolean sendRooms(List<String> rooms) {
+        RoomResultPayload rrp = new RoomResultPayload();
+        rrp.setRooms(rooms);
+        return sendToClient(rrp);
+    }
+
     protected boolean sendDisconnect(long clientId) {
         Payload payload = new Payload();
         payload.setClientId(clientId);
@@ -108,7 +119,6 @@ public class ServerThread extends BaseServerThread {
      * 
      * @return true for successful send
      */
-    //ekn3 10/30/25
     protected boolean sendClientId() {
         ConnectionPayload payload = new ConnectionPayload();
         payload.setPayloadType(PayloadType.CLIENT_ID);
@@ -125,7 +135,6 @@ public class ServerThread extends BaseServerThread {
      * @param message
      * @return true for successful send
      */
-    //ekn3 11/02/25
     protected boolean sendMessage(long clientId, String message) {
         Payload payload = new Payload();
         payload.setPayloadType(PayloadType.MESSAGE);
@@ -135,7 +144,6 @@ public class ServerThread extends BaseServerThread {
     }
 
     // End Send*() Methods
-    //ekn3 10/30/25
     @Override
     protected void processPayload(Payload incoming) {
 
@@ -162,8 +170,11 @@ public class ServerThread extends BaseServerThread {
             case ROOM_LEAVE:
                 currentRoom.handleJoinRoom(this, Room.LOBBY);
                 break;
+            case ROOM_LIST:
+                currentRoom.handleListRooms(this, incoming.getMessage());
+                break;
             default:
-                System.out.println(TextFX.colorize("Unknown payload type received", Color.RED));
+                LoggerUtil.INSTANCE.warning(TextFX.colorize("Unknown payload type received", Color.RED));
                 break;
         }
     }

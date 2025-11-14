@@ -1,7 +1,7 @@
 package Projects.CommonFiles;
 
 import java.util.HashMap;
-//ekn3 11/1/2025
+
 public enum Command {
     QUIT("quit"),
     DISCONNECT("disconnect"),
@@ -12,7 +12,8 @@ public enum Command {
     LEAVE_ROOM("leaveroom"),
     JOIN_ROOM("joinroom"),
     NAME("name"),
-    LIST_USERS("users");
+    LIST_USERS("users"),
+    LIST_ROOMS("listrooms");
 
     private static final HashMap<String, Command> BY_COMMAND = new HashMap<>();
     static {
