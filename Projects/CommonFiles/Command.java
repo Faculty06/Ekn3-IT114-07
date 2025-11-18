@@ -13,7 +13,9 @@ public enum Command {
     JOIN_ROOM("joinroom"),
     NAME("name"),
     LIST_USERS("users"),
-    LIST_ROOMS("listrooms");
+    LIST_ROOMS("listrooms"),
+    READY("ready"),
+    EXAMPLE_TURN("exampleturn"),;
 
     private static final HashMap<String, Command> BY_COMMAND = new HashMap<>();
     static {
