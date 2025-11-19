@@ -5,6 +5,8 @@ public class User {
     private String clientName;
     private boolean isReady = false;
     private boolean tookTurn = false;
+    private int points =0;
+
 
     /**
      * @return the clientId
@@ -51,6 +53,7 @@ public class User {
         this.clientName = null;
         this.isReady = false;
         this.tookTurn = false;
+        this.points = 0;
     }
 
     /**
@@ -65,5 +68,11 @@ public class User {
      */
     public void setTookTurn(boolean tookTurn) {
         this.tookTurn = tookTurn;
+    }
+    public int getPoints(){
+        return points;
+    }
+    public void setPoints(int points){
+        this.points = points;
     }
 }
