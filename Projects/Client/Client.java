@@ -15,15 +15,17 @@ import java.util.regex.Pattern;
 import Projects.CommonFiles.Command;
 import Projects.CommonFiles.ConnectionPayload;
 import Projects.CommonFiles.Constants;
+import Projects.CommonFiles.GameStatePayload;
 import Projects.CommonFiles.LoggerUtil;
 import Projects.CommonFiles.Payload;
 import Projects.CommonFiles.PayloadType;
 import Projects.CommonFiles.Phase;
+import Projects.CommonFiles.PointsPayload;
 import Projects.CommonFiles.ReadyPayload;
 import Projects.CommonFiles.RoomAction;
 import Projects.CommonFiles.RoomResultPayload;
 import Projects.CommonFiles.TextFX;
-import Projects.CommonFiles.user;
+import Projects.CommonFiles.User;
 import Projects.CommonFiles.TextFX.Color;
 
 /**
@@ -130,6 +132,7 @@ public enum Client {
      * @return true if the text was a command or triggered a command
      * @throws IOException
      */
+
     private boolean processClientCommand(String text) throws IOException {
         boolean wasCommand = false;
         if (text.startsWith(Constants.COMMAND_TRIGGER)) {
@@ -217,10 +220,31 @@ public enum Client {
 
                 sendDoTurn(text);
                 wasCommand = true;
+                
+            } else if (text.startsWith(Command.GUESS.command)) {
+                text = text.replace(Command.GUESS.command, "").trim();
+                if (text.isEmpty()) {
+                    LoggerUtil.INSTANCE.warning(TextFX.colorize("Usage: /guess <word>", Color.RED));
+                    return true;
+                }
+                sendDoTurn("GUESS " + text);
+                wasCommand = true;
+            } else if (text.startsWith(Command.LETTER.command)) {
+                text = text.replace(Command.LETTER.command, "").trim();
+                if (text.isEmpty() || text.length() > 1) {
+                    LoggerUtil.INSTANCE.warning(TextFX.colorize("Usage: /letter <char>", Color.RED));
+                    return true;
+                }
+                sendDoTurn("LETTER " + text);
+                wasCommand = true;
+            } else if (text.equalsIgnoreCase(Command.SKIP.command)) {
+                sendDoTurn("SKIP");
+                wasCommand = true;
             }
         }
+        
         return wasCommand;
-    }
+    } 
 
     // Start Send*() methods
     private void sendDoTurn(String text) throws IOException {
@@ -430,6 +454,12 @@ public enum Client {
                 // note no data necessary as this is just a trigger
                 processResetTurn();
                 break;
+            case POINTS:
+                processPoints(payload);
+                break;
+            case GAME_STATE:
+                processGameState(payload);
+                break;
             default:
                 LoggerUtil.INSTANCE.warning(TextFX.colorize("Unhandled payload type", Color.YELLOW));
                 break;
@@ -438,6 +468,28 @@ public enum Client {
     }
 
     // Start process*() methods
+    
+    private void processPoints(Payload payload) {
+        if (payload instanceof PointsPayload) {
+            PointsPayload pp = (PointsPayload) payload;
+            if (knownClients.containsKey(pp.getClientId())) {
+                knownClients.get(pp.getClientId()).setPoints(pp.getPoints());
+                LoggerUtil.INSTANCE.info(TextFX.colorize(String.format("Client %s now has %d points", 
+                    pp.getClientId(), pp.getPoints()), Color.YELLOW));
+            }
+        }
+    }
+
+    private void processGameState(Payload payload) {
+        if (payload instanceof GameStatePayload) {
+            GameStatePayload gsp = (GameStatePayload) payload;
+            LoggerUtil.INSTANCE.info(TextFX.colorize(
+                String.format("HANGMAN: %s | Strikes: %d/%d", 
+                gsp.getHiddenWord(), gsp.getCurrentStrikes(), gsp.getMaxStrikes()), 
+                Color.PURPLE));
+        }
+    }
+
     private void processResetTurn() {
         knownClients.values().forEach(cp -> cp.setTookTurn(false));
         System.out.println("Turn status reset for everyone");

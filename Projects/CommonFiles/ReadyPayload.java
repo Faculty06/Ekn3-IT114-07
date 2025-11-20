@@ -1,4 +1,4 @@
-package Project.Common;
+package Projects.CommonFiles;
 
 public class ReadyPayload extends Payload {
     private boolean isReady;
