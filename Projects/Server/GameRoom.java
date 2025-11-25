@@ -88,7 +88,6 @@ public class GameRoom extends BaseGameRoom {
     /** {@inheritDoc} */
     @Override
     protected void onClientRemoved(ServerThread sp) {
-        // added after Summer 2024 Demo
         // Stops the timers so room can clean up
         LoggerUtil.INSTANCE.info("Player Removed, remaining: " + clientsInRoom.size());
         long removedClient = sp.getClientId();
@@ -152,9 +151,6 @@ public class GameRoom extends BaseGameRoom {
         round++;
         setupNewWord();
         relay(null, String.format("Round %d has started", round));
-        // startRoundTimer(); Round timers aren't needed for turns
-        // if you do decide to use it, ensure it's reasonable and based on the number of
-        // players
         LoggerUtil.INSTANCE.info("onRoundStart() end");
         onTurnStart();
     }
@@ -422,8 +418,6 @@ public class GameRoom extends BaseGameRoom {
         relay(null, sb.toString());
     }
 
-
-
     protected void handleTurnAction(ServerThread currentUser, String exampleText) {
         // check if the client is in the room
         try {
@@ -458,7 +452,6 @@ public class GameRoom extends BaseGameRoom {
                         "Unknown game command. Use /guess <word>, /letter <char>, or /skip.");
                 onTurnEnd();
             }
-
 
         } catch (NotPlayersTurnException e) {
             currentUser.sendMessage(Constants.DEFAULT_CLIENT_ID, "It's not your turn");
