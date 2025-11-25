@@ -150,6 +150,7 @@ public class GameRoom extends BaseGameRoom {
         resetRoundTimer();
         resetTurnStatus();
         round++;
+        setupNewWord();
         relay(null, String.format("Round %d has started", round));
         // startRoundTimer(); Round timers aren't needed for turns
         // if you do decide to use it, ensure it's reasonable and based on the number of
@@ -204,8 +205,10 @@ public class GameRoom extends BaseGameRoom {
         LoggerUtil.INSTANCE.info("onRoundEnd() start");
         resetRoundTimer(); // reset timer if round ended without the time expiring
 
+        syncScoreboard(false);
+
         LoggerUtil.INSTANCE.info("onRoundEnd() end");
-        if (round >= 3) {
+        if (round >= MAX_ROUNDS) {
             onSessionEnd();
         } else {
             onRoundStart();
@@ -216,6 +219,15 @@ public class GameRoom extends BaseGameRoom {
     @Override
     protected void onSessionEnd() {
         LoggerUtil.INSTANCE.info("onSessionEnd() start");
+        syncScoreboard(true);
+        relay(null, "Game Over");
+
+        //reset server-side player data
+        users.values().forEach(u -> u.setPoints(0));
+        strikes = 0;
+        guessedLetters.clear();
+        currentWord = null;
+        currentBlanks = new char[0];
         turnOrder.clear();
         currentTurnClientId = Constants.DEFAULT_CLIENT_ID;
         resetReadyStatus();
@@ -430,10 +442,7 @@ public class GameRoom extends BaseGameRoom {
                 currentUser.sendMessage(Constants.DEFAULT_CLIENT_ID, "No command provided.");
                 onTurnEnd();
                 return;
-            }            
-            // finished processing the turn
-
-
+            } 
              String command = exampleText.toLowerCase().trim();
 
             if (command.startsWith("/guess")) {

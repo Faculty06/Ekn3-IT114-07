@@ -227,7 +227,7 @@ public enum Client {
                     LoggerUtil.INSTANCE.warning(TextFX.colorize("Usage: /guess <word>", Color.RED));
                     return true;
                 }
-                sendDoTurn("GUESS " + text);
+                sendDoTurn("/guess " + text);
                 wasCommand = true;
             } else if (text.startsWith(Command.LETTER.command)) {
                 text = text.replace(Command.LETTER.command, "").trim();
@@ -235,10 +235,10 @@ public enum Client {
                     LoggerUtil.INSTANCE.warning(TextFX.colorize("Usage: /letter <char>", Color.RED));
                     return true;
                 }
-                sendDoTurn("LETTER " + text);
+                sendDoTurn("/letter " + text);
                 wasCommand = true;
             } else if (text.equalsIgnoreCase(Command.SKIP.command)) {
-                sendDoTurn("SKIP");
+                sendDoTurn("/skip");
                 wasCommand = true;
             }
         }
