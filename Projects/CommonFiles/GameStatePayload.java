@@ -35,6 +35,8 @@ public class GameStatePayload extends Payload {
 
     @Override
     public String toString() {
-        return super.toString() + String.format(" Word: [%s] Strikes: [%d/%d]",getPayloadType(),getClientId(), hiddenWord, currentStrikes, maxStrikes);
-    }
+    return String.format(
+        "GameStatePayload[type=%s, clientId=%d, hiddenWord=%s, currentStrikes=%d, maxStrikes=%d]",
+        getPayloadType(),getClientId(),hiddenWord, currentStrikes,maxStrikes);
+}
 }
