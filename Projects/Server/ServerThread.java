@@ -11,11 +11,13 @@ import Projects.CommonFiles.LoggerUtil;
 import Projects.CommonFiles.Payload;
 import Projects.CommonFiles.PayloadType;
 import Projects.CommonFiles.Phase;
+import Projects.CommonFiles.PointsPayload;
 import Projects.CommonFiles.ReadyPayload;
 import Projects.CommonFiles.RoomAction;
 import Projects.CommonFiles.RoomResultPayload;
 import Projects.CommonFiles.TextFX;
 import Projects.CommonFiles.TextFX.Color;
+import Projects.CommonFiles.GameStatePayload;
 
 /**
  * A server-side representation of a single client
@@ -150,6 +152,20 @@ public class ServerThread extends BaseServerThread {
      *                   sync)
      * @return true for successful send
      */
+    public boolean sendPoints(long clientId, int points) {
+        PointsPayload pp = new PointsPayload();
+        pp.setClientId(clientId);
+        pp.setPoints(points);
+        return sendToClient(pp);
+    }
+
+    public boolean sendGameState(String hiddenWord, int currentStrikes, int maxStrikes) {
+        Projects.CommonFiles.GameStatePayload gsp = new Projects.CommonFiles.GameStatePayload();
+        gsp.setHiddenWord(hiddenWord);
+        gsp.setCurrentStrikes(currentStrikes);
+        gsp.setMaxStrikes(maxStrikes);
+        return sendToClient(gsp);
+    }
     protected boolean sendClientInfo(long clientId, String clientName, RoomAction action, boolean isSync) {
         ConnectionPayload payload = new ConnectionPayload();
         switch (action) {

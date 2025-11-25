@@ -16,6 +16,8 @@ public enum Command {
     LIST_ROOMS("listrooms"),
     READY("ready"),
     EXAMPLE_TURN("exampleturn"),
+
+    //ekn3 11/20/2025
     GUESS("guess"),
     LETTER ("letter"),
     SKIP("skip")
