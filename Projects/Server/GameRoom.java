@@ -1,8 +1,14 @@
 package Projects.Server;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Random;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import Projects.CommonFiles.Constants;
@@ -16,8 +22,20 @@ import Projects.Exceptions.PhaseMismatchException;
 import Projects.Exceptions.PlayerNotFoundException;
 
 public class GameRoom extends BaseGameRoom {
+    private static final int MAX_STRIKES = 6;
+    private static final int MAX_ROUNDS = 3;
+    private static final int POINTS_PER_LETTER = 1;
 
-    // used for general rounds (usually phase-based turns)
+    // word and game state
+    private final List<String> wordList = new ArrayList<>();
+    private String currentWord = null;
+    private char[] currentBlanks = new char[0];
+    private int strikes = 0;
+    private final List<Character> guessedLetters = new ArrayList<>();
+
+    // per-player server-side wrapper
+    private final ConcurrentHashMap<Long, SeverUser> users = new ConcurrentHashMap<>();
+     // used for general rounds (usually phase-based turns)
     private TimedEvent roundTimer = null;
 
     // used for granular turn handling (usually turn-order turns)
@@ -26,8 +44,36 @@ public class GameRoom extends BaseGameRoom {
     private long currentTurnClientId = Constants.DEFAULT_CLIENT_ID;
     private int round = 0;
 
-    public GameRoom(String name) {
+     public GameRoom(String name) {
         super(name);
+        loadWordList();
+    }
+
+    // ---------- word list loading ----------
+    private void loadWordList() {
+        final String RESOURCE = "/Assets/words.csv";
+        try (InputStream is = getClass().getResourceAsStream(RESOURCE)) {
+            if (is == null) {
+                info(String.format("Error: Could not find resource %s", RESOURCE));
+                return;
+            }
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(is))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (line.trim().isEmpty() || line.startsWith("#")) continue;
+                    String[] parts = line.split(",");
+                    if (parts.length > 0) {
+                        String word = parts[0].trim();
+                        if (!word.isEmpty()) wordList.add(word.toUpperCase());
+                    }
+                }
+            }
+            Collections.shuffle(wordList);
+            info(String.format("Loaded %d words", wordList.size()));
+        } catch (IOException e) {
+            info("Error loading word list: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 
     /** {@inheritDoc} */
@@ -318,6 +364,54 @@ public class GameRoom extends BaseGameRoom {
      * @param exampleText (arbitrary text from the client, can be used for
      *                    additional actions or information)
      */
+
+     private void setupNewWord() {
+        if (wordList.isEmpty()) {
+            relay(null, "Error: Word list is empty. Ending session.");
+            onSessionEnd();
+            return;
+        }
+        currentWord = wordList.get(new Random().nextInt(wordList.size())).toUpperCase();
+        currentBlanks = new char[currentWord.length()];
+        for (int i = 0; i < currentBlanks.length; i++)
+            currentBlanks[i] = '_';
+        strikes = 0;
+        guessedLetters.clear();
+        syncBlanksAndStrikes();
+        info(String.format("New Word chosen, length %d", currentBlanks.length));
+    }
+
+    private SeverUser getOrCreateUser(long clientId) {
+        return users.computeIfAbsent(clientId, id -> {
+            ServerThread st = clientsInRoom.get(id);
+            return st == null ? null : new SeverUser(st);
+        });
+    }
+
+    private void syncBlanksAndStrikes() {
+        String blanks = new String(currentBlanks);
+        // use GameStatePayload via ServerThread helper
+        clientsInRoom.values().forEach(st -> st.sendGameState(blanks, strikes, MAX_STRIKES));
+    }
+
+    private boolean isWordComplete() {
+        for (char c : currentBlanks)
+            if (c == '_')
+                return false;
+        return true;
+    }
+
+    private void syncScoreboard(boolean isFinal) {
+        List<SeverUser> sorted = users.values().stream()
+                .sorted((a, b) -> Integer.compare(b.getPoints(), a.getPoints())).collect(Collectors.toList());
+        StringBuilder sb = new StringBuilder(isFinal ? "\n*** FINAL SCOREBOARD ***\n" : "\n*** Current SCOREBOARD ***\n");
+        sorted.forEach(p -> sb.append(String.format("%s: %d\n", p.getClientName(), p.getPoints())));
+        sb.append("**************************");
+        relay(null, sb.toString());
+    }
+
+
+
     protected void handleTurnAction(ServerThread currentUser, String exampleText) {
         // check if the client is in the room
         try {
@@ -330,10 +424,33 @@ public class GameRoom extends BaseGameRoom {
                 return;
             }
             currentUser.setTookTurn(true);
-            // TODO handle example text possibly or other turn related intention from client
             sendTurnStatus(currentUser, currentUser.didTakeTurn());
+
+            if (exampleText == null || exampleText.isBlank()) {
+                currentUser.sendMessage(Constants.DEFAULT_CLIENT_ID, "No command provided.");
+                onTurnEnd();
+                return;
+            }            
             // finished processing the turn
-            onTurnEnd();
+
+
+             String command = exampleText.toLowerCase().trim();
+
+            if (command.startsWith("/guess")) {
+                String wordGuess = command.substring(6).trim();
+                processGuess(currentUser, wordGuess);
+            } else if (command.startsWith("/letter")) {
+                String letterGuess = command.substring(7).trim();
+                processLetter(currentUser, letterGuess);
+            } else if (command.equals("/skip")) {
+                processSkip(currentUser);
+            } else {
+                currentUser.sendMessage(Constants.DEFAULT_CLIENT_ID,
+                        "Unknown game command. Use /guess <word>, /letter <char>, or /skip.");
+                onTurnEnd();
+            }
+
+
         } catch (NotPlayersTurnException e) {
             currentUser.sendMessage(Constants.DEFAULT_CLIENT_ID, "It's not your turn");
             LoggerUtil.INSTANCE.severe("handleTurnAction exception", e);
@@ -351,6 +468,111 @@ public class GameRoom extends BaseGameRoom {
             LoggerUtil.INSTANCE.severe("handleTurnAction exception", e);
         }
     }
+    
+    private void processGuess(ServerThread guesserThread, String wordGuess) {
+        if (wordGuess == null || wordGuess.isBlank()) {
+            guesserThread.sendMessage(Constants.DEFAULT_CLIENT_ID, "Usage: /guess <word>");
+            onTurnEnd();
+            return;
+        }
 
+        SeverUser guesser = getOrCreateUser(guesserThread.getClientId());
+        if (guesser == null) {
+            guesserThread.sendMessage(Constants.DEFAULT_CLIENT_ID, "Player data unavailable");
+            onTurnEnd();
+            return;
+        }
+
+        wordGuess = wordGuess.toUpperCase();
+        if (wordGuess.equals(currentWord)) {
+            int missingLetters = (int) new String(currentBlanks).chars().filter(c -> c == '_').count();
+            int pointsEarned = missingLetters * 2;
+            guesser.setPoints(guesser.getPoints() + pointsEarned);
+
+            // sync points to all clients
+            clientsInRoom.values().forEach(c -> c.sendPoints(guesser.getClientId(), guesser.getPoints()));
+
+            relay(null, String.format("%s guessed the correct word %s and got %d points",
+                    guesser.getClientName(), currentWord, pointsEarned));
+
+            // reveal word and end round
+            currentBlanks = currentWord.toCharArray();
+            syncBlanksAndStrikes();
+            onRoundEnd();
+        } else {
+            strikes++;
+            syncBlanksAndStrikes();
+            relay(null, String.format("X %s guessed %s and it was wrong.", guesser.getClientName(), wordGuess));
+
+            if (strikes >= MAX_STRIKES) {
+                onRoundEnd();
+            } else {
+                onTurnEnd();
+            }
+        }
+    }
+
+    private void processLetter(ServerThread guesserThread, String letterGuess) {
+        if (letterGuess == null || letterGuess.length() != 1) {
+            guesserThread.sendMessage(Constants.DEFAULT_CLIENT_ID, "Usage: /letter <single_char>");
+            onTurnEnd();
+            return;
+        }
+
+        char letter = Character.toUpperCase(letterGuess.charAt(0));
+        if (guessedLetters.contains(letter)) {
+            guesserThread.sendMessage(Constants.DEFAULT_CLIENT_ID, "Letter already guessed: " + letter);
+            onTurnEnd();
+            return;
+        }
+
+        guessedLetters.add(letter);
+
+        int matches = 0;
+        for (int i = 0; i < currentWord.length(); i++) {
+            if (currentWord.charAt(i) == letter && currentBlanks[i] == '_') {
+                currentBlanks[i] = letter;
+                matches++;
+            }
+        }
+
+        SeverUser guesser = getOrCreateUser(guesserThread.getClientId());
+        if (guesser == null) {
+            guesserThread.sendMessage(Constants.DEFAULT_CLIENT_ID, "Player data unavailable");
+            onTurnEnd();
+            return;
+        }
+
+        if (matches > 0) {
+            int pointsEarned = matches * POINTS_PER_LETTER;
+            guesser.setPoints(guesser.getPoints() + pointsEarned);
+            clientsInRoom.values().forEach(c -> c.sendPoints(guesser.getClientId(), guesser.getPoints()));
+
+            relay(null, String.format("%s guessed %s, %d match(es), earned %d points",
+                    guesser.getClientName(), letter, matches, pointsEarned));
+
+            syncBlanksAndStrikes();
+
+            if (isWordComplete()) {
+                onRoundEnd();
+            } else {
+                onTurnEnd();
+            }
+        } else {
+            strikes++;
+            syncBlanksAndStrikes();
+            relay(null, String.format("X %s guessed %s and it wasn't in the word", guesser.getClientName(), letter));
+            if (strikes >= MAX_STRIKES) {
+                onRoundEnd();
+            } else {
+                onTurnEnd();
+            }
+        }
+    }
+
+    private void processSkip(ServerThread skipper) {
+        relay(null, String.format("%s skipped their turn", skipper.getDisplayName()));
+        onTurnEnd();
+    }
     // end receive data from ServerThread (GameRoom specific)
 }

@@ -17,7 +17,7 @@ public class Room implements AutoCloseable {
 
     public final static String LOBBY = "lobby";
 
-    private void info(String message) {
+    protected void info(String message) {
         LoggerUtil.INSTANCE.info(TextFX.colorize(String.format("Room[%s]: %s", name, message), Color.PURPLE));
     }
 
@@ -214,7 +214,6 @@ public class Room implements AutoCloseable {
                     Server.INSTANCE.joinRoom(Room.LOBBY, client);
                 } catch (RoomNotFoundException e) {
                     e.printStackTrace();
-                    // TODO, fill in, this shouldn't happen though
                 }
                 return true;
             });
