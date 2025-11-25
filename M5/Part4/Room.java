@@ -168,7 +168,7 @@ public class Room {
                     Server.INSTANCE.joinRoom(Room.LOBBY, client);
                 } catch (RoomNotFoundException e) {
                     e.printStackTrace();
-                    // TODO, fill in, this shouldn't happen though
+                    // , fill in, this shouldn't happen though
                 }
                 return true;
             });
