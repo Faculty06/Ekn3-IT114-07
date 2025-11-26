@@ -38,5 +38,5 @@ public class GameStatePayload extends Payload {
     return String.format(
         "GameStatePayload[type=%s, clientId=%d, hiddenWord=%s, currentStrikes=%d, maxStrikes=%d]",
         getPayloadType(),getClientId(),hiddenWord, currentStrikes,maxStrikes);
-}
-}
+    }
+} 

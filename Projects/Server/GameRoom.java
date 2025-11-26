@@ -103,11 +103,6 @@ public class GameRoom extends BaseGameRoom {
     }
 
     // timer handlers
-    private void startRoundTimer() {
-        roundTimer = new TimedEvent(30, () -> onRoundEnd());
-        roundTimer.setTickCallback((time) -> System.out.println("Round Time: " + time));
-    }
-
     private void resetRoundTimer() {
         if (roundTimer != null) {
             roundTimer.cancel();
@@ -155,7 +150,6 @@ public class GameRoom extends BaseGameRoom {
         }
         setupNewWord();
         relay(null, String.format("Round %d has started", round));
-        startRoundTimer();
         LoggerUtil.INSTANCE.info("onRoundStart() end");
         onTurnStart();
     }
