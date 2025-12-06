@@ -17,7 +17,6 @@ import Projects.CommonFiles.RoomAction;
 import Projects.CommonFiles.RoomResultPayload;
 import Projects.CommonFiles.TextFX;
 import Projects.CommonFiles.TextFX.Color;
-import Projects.CommonFiles.GameStatePayload;
 
 /**
  * A server-side representation of a single client

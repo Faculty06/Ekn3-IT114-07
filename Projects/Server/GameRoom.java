@@ -111,7 +111,7 @@ public class GameRoom extends BaseGameRoom {
     }
 
     private void startTurnTimer() {
-        turnTimer = new TimedEvent(120, () -> onTurnEnd());
+        turnTimer = new TimedEvent(600, () -> onTurnEnd());
         turnTimer.setTickCallback((time) -> System.out.println("Turn Time: " + time));
     }
 
