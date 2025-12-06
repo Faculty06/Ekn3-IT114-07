@@ -105,6 +105,11 @@ class HangmanClientFrame extends JFrame {
      *  - latest turn (guess history, whose turn)
      */
     private void pollClientState(ActionEvent e) {
+        if (!client.isConnected()) {
+            lastPhase = null;       // reset so when we do connect, phase changes are noticed
+            showConnect();
+            return;
+        }
         // 1. Phase changes -> swap between Ready/Game
         Phase currentPhase = client.getCurrentPhase();
         if (currentPhase != lastPhase) {
