@@ -105,11 +105,13 @@ class HangmanClientFrame extends JFrame {
      *  - latest turn (guess history, whose turn)
      */
     private void pollClientState(ActionEvent e) {
+        // If not connected, always show Connect screen
         if (!client.isConnected()) {
             lastPhase = null;       // reset so when we do connect, phase changes are noticed
             showConnect();
             return;
         }
+
         // 1. Phase changes -> swap between Ready/Game
         Phase currentPhase = client.getCurrentPhase();
         if (currentPhase != lastPhase) {
@@ -296,6 +298,12 @@ class HangmanClientFrame extends JFrame {
                 new JCheckBox("Correct word guess removes a strike");
         private final JCheckBox hardModeCheck =
                 new JCheckBox("Hard Mode (no disabled letters / guess history)");
+
+        // Room controls
+        private final JTextField roomField = new JTextField("hangman", 12);
+        private final JButton createRoomButton = new JButton("Create Room");
+        private final JButton joinRoomButton = new JButton("Join Room");
+
         private final JTable userTable;
         private final UserTableModel tableModel;
 
@@ -309,10 +317,18 @@ class HangmanClientFrame extends JFrame {
             JPanel top = new JPanel(new GridLayout(0, 1, 5, 5));
             top.add(new JLabel("Ready Check", SwingConstants.CENTER));
 
+            // Room controls row
+            JPanel roomPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+            roomPanel.add(new JLabel("Room:"));
+            roomPanel.add(roomField);
+            roomPanel.add(createRoomButton);
+            roomPanel.add(joinRoomButton);
+            top.add(roomPanel);
+
+            // Config toggles row
             JPanel toggles = new JPanel(new FlowLayout(FlowLayout.CENTER));
             toggles.add(removeStrikeCheck);
             toggles.add(hardModeCheck);
-
             top.add(toggles);
 
             add(top, BorderLayout.NORTH);
@@ -320,6 +336,33 @@ class HangmanClientFrame extends JFrame {
 
             JPanel bottom = new JPanel(new FlowLayout(FlowLayout.CENTER));
             bottom.add(readyButton);
+            add(bottom, BorderLayout.SOUTH);
+
+            // ---- Button actions ----
+
+            createRoomButton.addActionListener(e -> {
+                String room = roomField.getText().trim();
+                if (room.isEmpty()) {
+                    JOptionPane.showMessageDialog(this,
+                            "Please enter a room name.",
+                            "Room name required",
+                            JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+                client.createRoomFromUI(room);
+            });
+
+            joinRoomButton.addActionListener(e -> {
+                String room = roomField.getText().trim();
+                if (room.isEmpty()) {
+                    JOptionPane.showMessageDialog(this,
+                            "Please enter a room name.",
+                            "Room name required",
+                            JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+                client.joinRoomFromUI(room);
+            });
 
             readyButton.addActionListener(e -> {
                 removeStrikeOnCorrectGuess = removeStrikeCheck.isSelected();
@@ -327,8 +370,6 @@ class HangmanClientFrame extends JFrame {
                 client.sendConfigFromUI(removeStrikeOnCorrectGuess, hardMode);
                 client.toggleReadyFromUI();
             });
-
-            add(bottom, BorderLayout.SOUTH);
         }
 
         void resetReadyButton() {
