@@ -167,6 +167,7 @@ public class GameRoom extends BaseGameRoom {
         try {
             ServerThread currentPlayer = getNextPlayer();
             relay(null, String.format("It's %s's turn", currentPlayer.getDisplayName()));
+            sendTurnStatus(currentPlayer, currentPlayer.didTakeTurn());
         } catch (MissingCurrentPlayerException | PlayerNotFoundException e) {
             e.printStackTrace();
         }

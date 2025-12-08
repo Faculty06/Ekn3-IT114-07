@@ -54,6 +54,7 @@ class HangmanClientFrame extends JFrame {
     private Phase lastPhase = null;
     private String lastTurnMessageSeen = null;
     private final Map<Long, Integer> lastPointsSeen = new HashMap<>();
+    private long lastTurnClientIdSeen = -1L;
 
     // Configuration toggles set in Ready screen
     private boolean removeStrikeOnCorrectGuess = false;
@@ -109,6 +110,7 @@ class HangmanClientFrame extends JFrame {
         // If not connected, always show Connect screen
         if (!client.isConnected()) {
             lastPhase = null;       // reset so when we do connect, phase changes are noticed
+            lastTurnClientIdSeen = -1L;
             showConnect();
             return;
         }
@@ -138,6 +140,7 @@ class HangmanClientFrame extends JFrame {
         gamePanel.updateUserList(users, currentTurnId);
         readyPanel.updateUserList(users);
 
+        // 2a. points changes -> log to events
         for (User u : users) {
             int newPoints = u.getPoints();
             Integer oldPoints = lastPointsSeen.get(u.getClientId());
@@ -150,18 +153,30 @@ class HangmanClientFrame extends JFrame {
             }
         }
 
+        // 2b. Turn owner change -> update label + start countdown
+        if (currentTurnId != lastTurnClientIdSeen && currentTurnId != 0L && currentTurnId != -1L) {
+            lastTurnClientIdSeen = currentTurnId;
+
+            User turnUser = map.get(currentTurnId);
+            String name = (turnUser != null)
+                    ? turnUser.getClientName()
+                    : ("#" + currentTurnId);
+
+            gamePanel.setCurrentTurnLabel(name);
+        }
+
         // 3. Update game state (strikes + word blanks)
         GameStatePayload gsp = client.getLatestGameState();
         if (gsp != null) {
             gamePanel.updateGameState(gsp, hardMode, joinAsSpectator);
         }
 
-        // 4. NEW: Generic game events from server (MESSAGE payloads)
+        // 4. Generic game events from server (MESSAGE payloads)
         for (String message : client.drainGameEvents()) {
             gamePanel.appendEvent(message);
         }
 
-        // 5. Turn / guess history + whose turn
+        // 5. Turn / guess history + turn-related events
         String lastTurn = client.getLastTurnMessage();
         if (lastTurn != null && !lastTurn.equals(lastTurnMessageSeen)) {
             lastTurnMessageSeen = lastTurn;
@@ -219,8 +234,6 @@ class HangmanClientFrame extends JFrame {
                                     name, lastTurn));
                 }
             }
-
-            gamePanel.setCurrentTurnLabel(name);
         }
     }
 
@@ -607,8 +620,8 @@ class HangmanClientFrame extends JFrame {
 
         void setCurrentTurnLabel(String name) {
             currentTurnLabel.setText("Current turn: " + name);
-
-            startTurnTimer(150); // 
+            // start/restart turn countdown every time a new turn owner is set
+            startTurnTimer(600); 
         }
 
         private void startTurnTimer(int seconds) {
@@ -689,7 +702,6 @@ class UserTableModel extends AbstractTableModel {
             case 3:
                 return u.getPoints();
             case 4:
-                
                 if (u.isSpectator()) return "Spectator";
                 if (u.isAway()) return "Away";
                 if (u.isReady()) return "Ready";
