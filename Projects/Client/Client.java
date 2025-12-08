@@ -9,6 +9,8 @@ import java.util.List;
 import java.util.Scanner;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -60,6 +62,18 @@ public enum Client {
     private volatile GameStatePayload latestGameState = null;
     private volatile String lastTurnMessage = null;
     private volatile long currentTurnClientId = Constants.DEFAULT_CLIENT_ID;
+
+    // buffer of game-related messages (for Game Events panel)
+    private final CopyOnWriteArrayList<String> gameEvents = new CopyOnWriteArrayList<>();
+
+    /**
+     * UI helper: drain all accumulated game events since last call.
+     */
+    public List<String> drainGameEvents() {
+        List<String> copy = new java.util.ArrayList<>(gameEvents);
+        gameEvents.clear();
+        return copy;
+    }
 
     // ---------------------------------------------------------------------
     // UI accessors
@@ -115,14 +129,15 @@ public enum Client {
 
     public void sendConfigFromUI(boolean removeStrikeOnCorrectGuess, boolean hardMode) {
         try {
-            String msg = String.format("/config removeStrike=%s hardMode=%s",
+            String message = String.format("/config removeStrike=%s hardMode=%s",
                     removeStrikeOnCorrectGuess, hardMode);
-            sendDoTurn(msg);
+            sendDoTurn(message);
         } catch (IOException e) {
             LoggerUtil.INSTANCE.severe("Failed to send config", e);
         }
     }
-        /**
+
+    /**
      * UI helper: create a game room with the given name.
      */
     public void createRoomFromUI(String roomName) {
@@ -136,6 +151,7 @@ public enum Client {
             LoggerUtil.INSTANCE.severe("Failed to create room", e);
         }
     }
+
     /**
      * UI helper: join an existing game room with the given name.
      */
@@ -602,7 +618,7 @@ public enum Client {
     }
 
     // Start process*() methods
-    //ekn3 20/11/25
+    // ekn3 20/11/25
 
     private void processPoints(Payload payload) {
         if (payload instanceof PointsPayload) {
@@ -660,6 +676,26 @@ public enum Client {
     private void processPhase(Payload payload) {
         currentPhase = Enum.valueOf(Phase.class, payload.getMessage());
         System.out.println(TextFX.colorize("Current phase is " + currentPhase.name(), Color.YELLOW));
+
+        // When the server returns to READY, a session has ended and we're back
+        // at the lobby/ready-check state. Reset client-side game data.
+        if (currentPhase == Phase.READY) {
+            // Reset all known clients' game state
+            knownClients.values().forEach(u -> {
+                u.setPoints(0);
+                u.setReady(false);
+                u.setTookTurn(false);
+                u.setAway(false);
+                u.setSpectator(false);
+                u.setSolutionWord(null);
+            });
+
+            // Clear cached game state
+            latestGameState = null;
+            lastTurnMessage = null;
+            currentTurnClientId = Constants.DEFAULT_CLIENT_ID;
+            gameEvents.clear();
+        }
     }
 
     private void processResetReady() {
@@ -770,7 +806,10 @@ public enum Client {
     }
 
     private void processMessage(Payload payload) {
-        LoggerUtil.INSTANCE.info(TextFX.colorize(payload.getMessage(), Color.BLUE));
+        String message = payload.getMessage();
+        LoggerUtil.INSTANCE.info(TextFX.colorize(message, Color.BLUE));
+        // NEW: store for Game Events panel
+        gameEvents.add(message);
     }
 
     private void processReverse(Payload payload) {

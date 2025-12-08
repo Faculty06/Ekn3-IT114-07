@@ -3,5 +3,4 @@ zigzag
 word
 turns
 how
-now
 game

@@ -103,6 +103,7 @@ class HangmanClientFrame extends JFrame {
      *  - user list / points / away/spectator
      *  - game state (strikes, hidden word)
      *  - latest turn (guess history, whose turn)
+     *  - generic game events (from MESSAGE payloads)
      */
     private void pollClientState(ActionEvent e) {
         // If not connected, always show Connect screen
@@ -155,7 +156,12 @@ class HangmanClientFrame extends JFrame {
             gamePanel.updateGameState(gsp, hardMode, joinAsSpectator);
         }
 
-        // 4. Turn / guess history + whose turn
+        // 4. NEW: Generic game events from server (MESSAGE payloads)
+        for (String message : client.drainGameEvents()) {
+            gamePanel.appendEvent(message);
+        }
+
+        // 5. Turn / guess history + whose turn
         String lastTurn = client.getLastTurnMessage();
         if (lastTurn != null && !lastTurn.equals(lastTurnMessageSeen)) {
             lastTurnMessageSeen = lastTurn;
@@ -166,22 +172,50 @@ class HangmanClientFrame extends JFrame {
 
             // In hard mode, don't show guess history in the Game Events panel
             if (!hardMode) {
-                if ("/skip".equalsIgnoreCase(lastTurn)) {
+                // lastTurn is the raw command string from the client, e.g.
+                // "/skip", "/letter A", "/guess apple", "/away", "/back"
+                String cmd = lastTurn.trim().toLowerCase();
+
+                if (cmd.startsWith("/skip")) {
                     gamePanel.appendEvent(String.format("%s skipped their turn", name));
-                } else if (lastTurn.startsWith("/config")) {
-                    // handled logically at ReadyCheck level only
-                } else if (lastTurn.length() == 1) {
+
+                } else if (cmd.startsWith("/config")) {
+                    // Config messages handled by scoreboard/events, no extra UI text here
+
+                } else if (cmd.startsWith("/letter")) {
+                    // Extract the letter after "/letter"
+                    String[] parts = lastTurn.trim().split("\\s+");
+                    String letterShown = (parts.length >= 2) ? parts[1].toUpperCase() : "?";
                     gamePanel.appendEvent(
                             String.format("%s guessed letter '%s'",
-                                    name, lastTurn.toUpperCase()));
-                    gamePanel.disableLetter(lastTurn.toUpperCase().charAt(0));
-                } else if (lastTurn.startsWith("/away")) {
+                                    name, letterShown));
+                    if (letterShown.length() == 1) {
+                        gamePanel.disableLetter(letterShown.charAt(0));
+                    }
+
+                } else if (cmd.startsWith("/away")) {
+                    if (turnUser != null) {
+                        turnUser.setAway(true);   // keep User model in sync
+                    }
                     gamePanel.appendEvent(String.format("%s is away", name));
-                } else if (lastTurn.startsWith("/back")) {
+
+                } else if (cmd.startsWith("/back")) {
+                    if (turnUser != null) {
+                        turnUser.setAway(false);  // keep User model in sync
+                    }
                     gamePanel.appendEvent(String.format("%s is no longer away", name));
-                } else {
+
+                } else if (cmd.startsWith("/guess")) {
+                    // Extract the word after "/guess"
+                    String[] parts = lastTurn.trim().split("\\s+", 2);
+                    String guessedWord = (parts.length >= 2) ? parts[1] : "";
                     gamePanel.appendEvent(
                             String.format("%s guessed word \"%s\"",
+                                    name, guessedWord));
+                } else {
+                    // Fallback for any other turn text
+                    gamePanel.appendEvent(
+                            String.format("%s performed action: %s",
                                     name, lastTurn));
                 }
             }
@@ -473,9 +507,9 @@ class HangmanClientFrame extends JFrame {
             chatPanel.add(chatInput, BorderLayout.SOUTH);
 
             chatInput.addActionListener(e -> {
-                String msg = chatInput.getText().trim();
-                if (!msg.isEmpty()) {
-                    client.sendChatFromUI(msg);
+                String message = chatInput.getText().trim();
+                if (!message.isEmpty()) {
+                    client.sendChatFromUI(message);
                     chatInput.setText("");
                 }
             });
