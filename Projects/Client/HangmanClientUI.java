@@ -608,10 +608,7 @@ class HangmanClientFrame extends JFrame {
         void setCurrentTurnLabel(String name) {
             currentTurnLabel.setText("Current turn: " + name);
 
-            User me = client.getMyUser();
-            if (me != null && name.equals(me.getClientName())) {
-                startTurnTimer(30); // 30s per turn, adjustable
-            }
+            startTurnTimer(150); // 
         }
 
         private void startTurnTimer(int seconds) {
@@ -692,7 +689,7 @@ class UserTableModel extends AbstractTableModel {
             case 3:
                 return u.getPoints();
             case 4:
-                // These methods need to exist on User
+                
                 if (u.isSpectator()) return "Spectator";
                 if (u.isAway()) return "Away";
                 if (u.isReady()) return "Ready";

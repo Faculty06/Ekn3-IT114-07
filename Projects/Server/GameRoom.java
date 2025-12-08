@@ -426,7 +426,7 @@ public class GameRoom extends BaseGameRoom {
 
             String command = exampleText.toLowerCase().trim();
 
-            // UPDATE: handle configuration change; DOES NOT consume a turn
+            // UPDATE
             if (command.startsWith("/config")) {
                 // Example format: /config removeStrike=true hardMode=false
                 String[] parts = command.split("\\s+");
@@ -500,6 +500,9 @@ public class GameRoom extends BaseGameRoom {
                 ? String.format("%s is away", currentUser.getDisplayName())
                 : String.format("%s is no longer away", currentUser.getDisplayName());
         relay(null, message);
+        if (away && currentUser.getClientId() == currentTurnClientId) {
+        onTurnEnd();
+        }
 
         // Full sync of away status to all clients would ideally be done via a
         // SYNC_CLIENT-style payload; here we at least broadcast the message for UI.
