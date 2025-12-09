@@ -56,13 +56,13 @@ public enum Client {
     private User myUser = new User();
     private Phase currentPhase = Phase.READY;
 
-    // --- GUI state fields ---
+    // --- UI state fields ---
     private volatile GameStatePayload latestGameState = null;
     private volatile String lastTurnMessage = null;
     private volatile long currentTurnClientId = Constants.DEFAULT_CLIENT_ID;
 
     // ---------------------------------------------------------------------
-    // GUI accessors
+    // UI accessors
     // ---------------------------------------------------------------------
 
     public ConcurrentHashMap<Long, User> getKnownClients() {
@@ -90,7 +90,7 @@ public enum Client {
     }
 
     /**
-     * GUI-friendly connect:
+     * UI-friendly connect:
      *  - opens socket
      *  - starts listenToServer()
      *  - sends username to server
@@ -110,7 +110,7 @@ public enum Client {
     }
 
     // ---------------------------------------------------------------------
-    // UI/GUI helper methods (core implementations)
+    // UI helper methods (core implementations)
     // ---------------------------------------------------------------------
 
     public void sendConfigFromUI(boolean removeStrikeOnCorrectGuess, boolean hardMode) {
@@ -120,6 +120,34 @@ public enum Client {
             sendDoTurn(msg);
         } catch (IOException e) {
             LoggerUtil.INSTANCE.severe("Failed to send config", e);
+        }
+    }
+        /**
+     * UI helper: create a game room with the given name.
+     */
+    public void createRoomFromUI(String roomName) {
+        try {
+            if (roomName == null || roomName.isBlank()) {
+                LoggerUtil.INSTANCE.warning("Room name cannot be empty");
+                return;
+            }
+            sendRoomAction(roomName.trim(), RoomAction.CREATE);
+        } catch (IOException e) {
+            LoggerUtil.INSTANCE.severe("Failed to create room", e);
+        }
+    }
+    /**
+     * UI helper: join an existing game room with the given name.
+     */
+    public void joinRoomFromUI(String roomName) {
+        try {
+            if (roomName == null || roomName.isBlank()) {
+                LoggerUtil.INSTANCE.warning("Room name cannot be empty");
+                return;
+            }
+            sendRoomAction(roomName.trim(), RoomAction.JOIN);
+        } catch (IOException e) {
+            LoggerUtil.INSTANCE.severe("Failed to join room", e);
         }
     }
 
@@ -185,36 +213,6 @@ public enum Client {
             LoggerUtil.INSTANCE.severe("Failed to send away/back", e);
         }
     }
-
-    // ---------------------------------------------------------------------
-    // GUI-naming aliases (so HangmanClientGUI compiles without changes)
-    // ---------------------------------------------------------------------
-
-    public void sendConfigFromGui(boolean removeStrikeOnCorrectGuess, boolean hardMode) {
-        sendConfigFromUI(removeStrikeOnCorrectGuess, hardMode);
-    }
-
-    public void sendChatFromGui(String message) {
-        sendChatFromUI(message);
-    }
-
-    public void toggleReadyFromGui() {
-        toggleReadyFromUI();
-    }
-
-    public void guessLetterFromGui(char c) {
-        guessLetterFromUI(c);
-    }
-
-    public void guessWordFromGui(String word) {
-        guessWordFromUI(word);
-    }
-
-    public void setAwayFromGui(boolean away) {
-        setAwayFromUI(away);
-    }
-
-    // ---------------------------------------------------------------------
 
     private void error(String message) {
         LoggerUtil.INSTANCE.severe(TextFX.colorize(String.format("%s", message), Color.RED));
@@ -648,7 +646,7 @@ public enum Client {
         User cp = knownClients.get(rp.getClientId());
         cp.setTookTurn(rp.isReady());
 
-        // GUI: track current turn + message
+        // UI: track current turn + message
         currentTurnClientId = cp.getClientId();
         lastTurnMessage = rp.getMessage();
 
