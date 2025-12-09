@@ -59,7 +59,7 @@ class HangmanClientFrame extends JFrame {
     // Configuration toggles set in Ready screen
     private boolean removeStrikeOnCorrectGuess = false;
     boolean hardMode = false;          // package-private so GamePanel can see it
-    private boolean joinAsSpectator = false;
+    private boolean joinAsSpectator = false; // currently local-only; server spectator comes from User
 
     HangmanClientFrame(Client client) {
         super("Hangman Client");
@@ -137,8 +137,24 @@ class HangmanClientFrame extends JFrame {
 
         long currentTurnId = client.getCurrentTurnClientId();
 
+        // Determine host (smallest clientId in room)
+        long hostId = users.isEmpty()
+                ? -1L
+                : users.stream().mapToLong(User::getClientId).min().orElse(-1L);
+
+        // Spectator state for this client
+        boolean spectatorMode = client.isSpectator();
+
         gamePanel.updateUserList(users, currentTurnId);
         readyPanel.updateUserList(users);
+
+        // Host-only controls + host tag
+        readyPanel.updateHostControls(client.isHost());
+        readyPanel.setHostClientId(hostId);
+        gamePanel.setHostClientId(hostId);
+
+        // Spectator: grey out Ready button
+        readyPanel.updateSpectatorControls(spectatorMode);
 
         // 2a. points changes -> log to events
         for (User u : users) {
@@ -168,7 +184,7 @@ class HangmanClientFrame extends JFrame {
         // 3. Update game state (strikes + word blanks)
         GameStatePayload gsp = client.getLatestGameState();
         if (gsp != null) {
-            gamePanel.updateGameState(gsp, hardMode, joinAsSpectator);
+            gamePanel.updateGameState(gsp, hardMode, spectatorMode);
         }
 
         // 4. Generic game events from server (MESSAGE payloads)
@@ -332,6 +348,7 @@ class HangmanClientFrame extends JFrame {
 
             // NOTE: actual spectator registration should be implemented
             // on the server side (e.g. via a special payload or command).
+            // For now, we trust the server to flag User.isSpectator() correctly.
             showReady();
         }
     }
@@ -385,6 +402,10 @@ class HangmanClientFrame extends JFrame {
             bottom.add(readyButton);
             add(bottom, BorderLayout.SOUTH);
 
+            // Hard mode is host-only; start disabled until we know we're host
+            hardModeCheck.setEnabled(false);
+            hardModeCheck.setToolTipText("Only the host can toggle hard mode.");
+
             // ---- Button actions ----
 
             createRoomButton.addActionListener(e -> {
@@ -425,6 +446,37 @@ class HangmanClientFrame extends JFrame {
 
         void updateUserList(List<User> users) {
             tableModel.setUsers(users);
+        }
+
+        /**
+         * Enable/disable host-only controls like Hard Mode.
+         */
+        void updateHostControls(boolean isHost) {
+            hardModeCheck.setEnabled(isHost);
+            if (isHost) {
+                hardModeCheck.setToolTipText(null);
+            } else {
+                hardModeCheck.setToolTipText("Only the host can toggle hard mode.");
+            }
+        }
+
+        /**
+         * Update the Ready button based on whether this client is a spectator.
+         */
+        void updateSpectatorControls(boolean isSpectator) {
+            readyButton.setEnabled(!isSpectator);
+            if (isSpectator) {
+                readyButton.setToolTipText("Spectators cannot ready up.");
+            } else {
+                readyButton.setToolTipText(null);
+            }
+        }
+
+        /**
+         * Tell the user table which clientId is the host so we can label it "(Host)".
+         */
+        void setHostClientId(long hostId) {
+            tableModel.setHostClientId(hostId);
         }
     }
 
@@ -493,6 +545,10 @@ class HangmanClientFrame extends JFrame {
             wordGuessPanel.add(wordGuessField, BorderLayout.CENTER);
             wordGuessPanel.add(wordGuessButton, BorderLayout.EAST);
             wordGuessButton.addActionListener(e -> {
+                if (client.isSpectator()) {
+                    // spectators shouldn't send guesses
+                    return;
+                }
                 String guess = wordGuessField.getText().trim();
                 if (!guess.isEmpty()) {
                     client.guessWordFromUI(guess);
@@ -557,15 +613,22 @@ class HangmanClientFrame extends JFrame {
         private void buildLettersPanel() {
             lettersPanel.removeAll();
             letterButtons.clear();
+            boolean spectatorNow = client.isSpectator();
             for (char c = 'A'; c <= 'Z'; c++) {
                 JButton btn = new JButton(String.valueOf(c));
                 btn.addActionListener(e -> {
+                    if (client.isSpectator()) {
+                        // spectators shouldn't send letter guesses
+                        return;
+                    }
                     char letter = btn.getText().charAt(0);
                     client.guessLetterFromUI(letter);
                     if (!hardMode) {
                         btn.setEnabled(false);
                     }
                 });
+                // Grey out letters immediately if we're a spectator.
+                btn.setEnabled(!spectatorNow);
                 letterButtons.put(c, btn);
                 lettersPanel.add(btn);
             }
@@ -583,6 +646,10 @@ class HangmanClientFrame extends JFrame {
         void updateUserList(List<User> users, long currentTurnId) {
             userTableModel.setUsers(users);
             userTableModel.setCurrentTurnClientId(currentTurnId);
+        }
+
+        void setHostClientId(long hostId) {
+            userTableModel.setHostClientId(hostId);
         }
 
         void resetForNewSession() {
@@ -611,6 +678,15 @@ class HangmanClientFrame extends JFrame {
             if (gsp.getCurrentStrikes() == 0) {
                 buildLettersPanel();
             }
+
+            // Spectators: disable interactive guess controls on the UI
+            boolean canPlay = !spectatorMode;
+            for (JButton btn : letterButtons.values()) {
+                // in hard mode they re-disable after click, but spectators should always be disabled
+                btn.setEnabled(canPlay && (!hardMode));
+            }
+            wordGuessField.setEnabled(canPlay);
+            wordGuessButton.setEnabled(canPlay);
         }
 
         void appendEvent(String text) {
@@ -621,7 +697,7 @@ class HangmanClientFrame extends JFrame {
         void setCurrentTurnLabel(String name) {
             currentTurnLabel.setText("Current turn: " + name);
             // start/restart turn countdown every time a new turn owner is set
-            startTurnTimer(600); 
+            startTurnTimer(600);
         }
 
         private void startTurnTimer(int seconds) {
@@ -654,7 +730,7 @@ class HangmanClientFrame extends JFrame {
  *
  * Columns:
  *  - Turn marker
- *  - Username
+ *  - Username (with "(Host)" tag for host)
  *  - ID
  *  - Points
  *  - Status (Ready / Away / Spectator)
@@ -663,6 +739,7 @@ class UserTableModel extends AbstractTableModel {
     private final String[] columns = {"Turn", "User", "ID", "Points", "Status"};
     private List<User> users = new ArrayList<>();
     private long currentTurnClientId = -1;
+    private long hostClientId = -1;
 
     public void setUsers(List<User> users) {
         this.users = (users != null) ? users : new ArrayList<>();
@@ -671,6 +748,11 @@ class UserTableModel extends AbstractTableModel {
 
     public void setCurrentTurnClientId(long id) {
         this.currentTurnClientId = id;
+        fireTableDataChanged();
+    }
+
+    public void setHostClientId(long id) {
+        this.hostClientId = id;
         fireTableDataChanged();
     }
 
@@ -696,7 +778,11 @@ class UserTableModel extends AbstractTableModel {
             case 0:
                 return (u.getClientId() == currentTurnClientId) ? "►" : "";
             case 1:
-                return u.getClientName();
+                String name = u.getClientName();
+                if (u.getClientId() == hostClientId && hostClientId != -1) {
+                    return name + " (Host)";
+                }
+                return name;
             case 2:
                 return u.getClientId();
             case 3:
