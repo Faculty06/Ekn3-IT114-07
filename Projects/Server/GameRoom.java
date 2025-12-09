@@ -22,7 +22,7 @@ import Projects.Exceptions.PhaseMismatchException;
 import Projects.Exceptions.PlayerNotFoundException;
 
 public class GameRoom extends BaseGameRoom {
-    private static final int MAX_STRIKES = 3;
+    private static final int MAX_STRIKES = 5;
     private static final int MAX_ROUNDS = 5;
     private static final int POINTS_PER_LETTER = 1;
 
@@ -383,9 +383,15 @@ public class GameRoom extends BaseGameRoom {
     }
 
     private void syncBlanksAndStrikes() {
-        String blanks = new String(currentBlanks);
-        clientsInRoom.values().forEach(st -> st.sendGameState(blanks, strikes, MAX_STRIKES));
-    }
+    String blanks = new String(currentBlanks);
+
+    clientsInRoom.values().forEach(st -> {
+        // Players (ready) see blanks, spectators see full word
+        String wordForThisClient = st.isReady() ? blanks : currentWord;
+
+        st.sendGameState(wordForThisClient, strikes, MAX_STRIKES);
+    });
+}
 
     private boolean isWordComplete() {
         for (char c : currentBlanks) {
