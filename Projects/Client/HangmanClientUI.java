@@ -184,7 +184,7 @@ class HangmanClientFrame extends JFrame {
         // 3. Update game state (strikes + word blanks)
         GameStatePayload gsp = client.getLatestGameState();
         if (gsp != null) {
-            gamePanel.updateGameState(gsp, hardMode, spectatorMode);
+            gamePanel.updateGameState(gsp, hardMode, joinAsSpectator);
         }
 
         // 4. Generic game events from server (MESSAGE payloads)
