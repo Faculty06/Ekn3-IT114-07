@@ -394,16 +394,16 @@ public class GameRoom extends BaseGameRoom {
      * - Spectators see the full correct word.
      */
     private void syncBlanksAndStrikes() {
-        String blanks = new String(currentBlanks);
+    String blanks = new String(currentBlanks);
 
-        clientsInRoom.values().forEach(st -> {
-            SeverUser su = getOrCreateUser(st.getClientId());
-            boolean isSpectator = (su != null && su.isSpectator());
+    clientsInRoom.values().forEach(st -> {
+        // Players (ready) see blanks, spectators see full word
+        String wordForThisClient = st.isReady() ? blanks : currentWord;
 
-            String wordForThisClient = isSpectator ? currentWord : blanks;
-            st.sendGameState(wordForThisClient, strikes, MAX_STRIKES);
-        });
-    }
+        st.sendGameState(wordForThisClient, strikes, MAX_STRIKES);
+    });
+}
+
 
     private boolean isWordComplete() {
         for (char c : currentBlanks) {

@@ -18,7 +18,7 @@
 
 
 - Milestone 3
-  - 
+  - https://github.com/Faculty06/Ekn3-IT114-07/blob/Milestone3/Projects/ekn3_IT114-007-F2025_it114-milestone-3-hangman_12-08-2025_22-56-11.pdf
 
 
 - Demo Link
