@@ -22,13 +22,13 @@ import Projects.Exceptions.PhaseMismatchException;
 import Projects.Exceptions.PlayerNotFoundException;
 
 public class GameRoom extends BaseGameRoom {
-    private static final int MAX_STRIKES = 5;
+    private static final int MAX_STRIKES = 3;
     private static final int MAX_ROUNDS = 5;
     private static final int POINTS_PER_LETTER = 1;
 
     // Configuration flags
-    private boolean removeStrikeOnCorrectGuess = false; // UPDATE: used in processGuess
-    private boolean hardMode = false;                   // UPDATE: used in processLetter
+    private boolean removeStrikeOnCorrectGuess = false; // used in processGuess
+    private boolean hardMode = false;                   // used in processLetter
 
     // word and game state
     private final List<String> wordList = new ArrayList<>();
@@ -37,7 +37,7 @@ public class GameRoom extends BaseGameRoom {
     private int strikes = 0;
     private final List<Character> guessedLetters = new ArrayList<>();
 
-    // per-player server-side wrapper
+    // per-player server-side wrapper (tracks points, away/spectator, etc.)
     private final ConcurrentHashMap<Long, SeverUser> users = new ConcurrentHashMap<>();
 
     // used for general rounds (usually phase-based turns)
@@ -223,7 +223,7 @@ public class GameRoom extends BaseGameRoom {
         // reset server-side player data
         users.values().forEach(u -> {
             u.setPoints(0);
-            // UPDATE: if you want to fully reset between sessions, you can also:
+            // if desired, you can also reset other flags here:
             // u.setReady(false);
             // u.setTookTurn(false);
             // u.setAway(false);
@@ -287,12 +287,17 @@ public class GameRoom extends BaseGameRoom {
     }
 
     /**
-     * Sets `turnOrder` to a shuffled list of players who are ready.
+     * Sets `turnOrder` to a shuffled list of players who are ready AND not spectators.
      */
     private void setTurnOrder() {
         turnOrder.clear();
         turnOrder = clientsInRoom.values().stream()
-                .filter(ServerThread::isReady)
+                .filter(ServerThread::isReady) // only ready players
+                .filter(sp -> {
+                    SeverUser su = getOrCreateUser(sp.getClientId());
+                    // treat null as non-spectator; otherwise skip spectators
+                    return su == null || !su.isSpectator();
+                })
                 .collect(Collectors.toList());
         Collections.shuffle(turnOrder);
     }
@@ -326,7 +331,7 @@ public class GameRoom extends BaseGameRoom {
             index = 0;
         }
 
-        // UPDATE: skip away players based on SeverUser.away flag
+        // skip away players based on SeverUser.away flag
         int visited = 0;
         while (visited < turnOrder.size()) {
             ServerThread candidate = turnOrder.get(index);
@@ -382,16 +387,23 @@ public class GameRoom extends BaseGameRoom {
         });
     }
 
+    /**
+     * Syncs the visible word + strikes to all clients.
+     *
+     * - Players (non-spectators) see blanks / partial word.
+     * - Spectators see the full correct word.
+     */
     private void syncBlanksAndStrikes() {
-    String blanks = new String(currentBlanks);
+        String blanks = new String(currentBlanks);
 
-    clientsInRoom.values().forEach(st -> {
-        // Players (ready) see blanks, spectators see full word
-        String wordForThisClient = st.isReady() ? blanks : currentWord;
+        clientsInRoom.values().forEach(st -> {
+            SeverUser su = getOrCreateUser(st.getClientId());
+            boolean isSpectator = (su != null && su.isSpectator());
 
-        st.sendGameState(wordForThisClient, strikes, MAX_STRIKES);
-    });
-}
+            String wordForThisClient = isSpectator ? currentWord : blanks;
+            st.sendGameState(wordForThisClient, strikes, MAX_STRIKES);
+        });
+    }
 
     private boolean isWordComplete() {
         for (char c : currentBlanks) {
@@ -418,6 +430,14 @@ public class GameRoom extends BaseGameRoom {
             checkCurrentPhase(currentUser, Phase.IN_PROGRESS);
             checkCurrentPlayer(currentUser.getClientId());
             checkIsReady(currentUser);
+
+            // Spectators should not be able to act as players (defensive check)
+            SeverUser su = getOrCreateUser(currentUser.getClientId());
+            if (su != null && su.isSpectator()) {
+                currentUser.sendMessage(Constants.DEFAULT_CLIENT_ID, "Spectators cannot take turns.");
+                return;
+            }
+
             if (currentUser.didTakeTurn()) {
                 currentUser.sendMessage(Constants.DEFAULT_CLIENT_ID, "You have already taken your turn this round");
                 return;
@@ -433,9 +453,8 @@ public class GameRoom extends BaseGameRoom {
 
             String command = exampleText.toLowerCase().trim();
 
-            // UPDATE
+            // /config removeStrike=<true/false> hardMode=<true/false>
             if (command.startsWith("/config")) {
-                // Example format: /config removeStrike=true hardMode=false
                 String[] parts = command.split("\\s+");
                 for (int i = 1; i < parts.length; i++) {
                     String[] kv = parts[i].split("=");
@@ -469,7 +488,7 @@ public class GameRoom extends BaseGameRoom {
                 processLetter(currentUser, letterGuess);
             } else if (command.equals("/skip")) {
                 processSkip(currentUser);
-            } else if (command.equals("/away") || command.equals("/back")) { // UPDATE: away/back support
+            } else if (command.equals("/away") || command.equals("/back")) { // away/back support
                 processAwayBack(currentUser, command.equals("/away"));
             } else {
                 currentUser.sendMessage(Constants.DEFAULT_CLIENT_ID,
@@ -494,7 +513,7 @@ public class GameRoom extends BaseGameRoom {
         }
     }
 
-    // UPDATE: new helper for /away and /back
+    // helper for /away and /back
     private void processAwayBack(ServerThread currentUser, boolean away) {
         SeverUser su = getOrCreateUser(currentUser.getClientId());
         if (su == null) {
@@ -507,12 +526,10 @@ public class GameRoom extends BaseGameRoom {
                 ? String.format("%s is away", currentUser.getDisplayName())
                 : String.format("%s is no longer away", currentUser.getDisplayName());
         relay(null, message);
-        if (away && currentUser.getClientId() == currentTurnClientId) {
-        onTurnEnd();
-        }
 
-        // Full sync of away status to all clients would ideally be done via a
-        // SYNC_CLIENT-style payload; here we at least broadcast the message for UI.
+        if (away && currentUser.getClientId() == currentTurnClientId) {
+            onTurnEnd();
+        }
     }
 
     private void processGuess(ServerThread guesserThread, String wordGuess) {
@@ -535,7 +552,7 @@ public class GameRoom extends BaseGameRoom {
             int pointsEarned = missingLetters * 2;
             guesser.setPoints(guesser.getPoints() + pointsEarned);
 
-            // UPDATE: optional config – remove one strike on correct guess
+            // optional config – remove one strike on correct guess
             if (removeStrikeOnCorrectGuess && strikes > 0) {
                 strikes--;
             }
@@ -572,7 +589,7 @@ public class GameRoom extends BaseGameRoom {
 
         char letter = Character.toUpperCase(letterGuess.charAt(0));
 
-        // UPDATE: hard mode behavior when guessing a letter that's already been guessed
+        // hard mode behavior when guessing a letter that's already been guessed
         if (guessedLetters.contains(letter)) {
             SeverUser guesser = getOrCreateUser(guesserThread.getClientId());
             if (guesser == null) {

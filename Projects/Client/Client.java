@@ -104,6 +104,28 @@ public enum Client {
     }
 
     /**
+     * Determine if this client is the "host" of the room.
+     * Host is defined as the connected client with the smallest clientId.
+     */
+    public boolean isHost() {
+        if (knownClients.isEmpty()) {
+            return false;
+        }
+        Long minId = knownClients.keySet().stream()
+                .min(Long::compareTo)
+                .orElse(myUser.getClientId());
+        return myUser.getClientId() == minId;
+    }
+
+    /**
+     * Helper for UI to know if this user is currently a spectator.
+     * (Value is driven by the server via User flags.)
+     */
+    public boolean isSpectator() {
+        return myUser.isSpectator();
+    }
+
+    /**
      * UI-friendly connect:
      *  - opens socket
      *  - starts listenToServer()
@@ -127,6 +149,11 @@ public enum Client {
     // UI helper methods (core implementations)
     // ---------------------------------------------------------------------
 
+    /**
+     * UI helper for sending server configuration, including hard mode.
+     * removeStrikeOnCorrectGuess / hardMode will be interpreted server-side
+     * via a "/config ..." TURN message.
+     */
     public void sendConfigFromUI(boolean removeStrikeOnCorrectGuess, boolean hardMode) {
         try {
             String message = String.format("/config removeStrike=%s hardMode=%s",
