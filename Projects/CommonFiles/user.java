@@ -6,6 +6,10 @@ public class User {
     private boolean isReady = false;
     private boolean tookTurn = false;
     private int points =0;
+    private boolean away = false;
+    private boolean spectator = false;
+    private String solutionWord;
+
 
 
     /**
@@ -74,5 +78,28 @@ public class User {
     }
     public void setPoints(int points){
         this.points = points;
+    }
+     // Elimination flag
+    public boolean isAway() {
+        return away;
+    }
+
+    public void setAway(boolean away) {
+        this.away = away;
+    }
+
+    // spectator flag
+    public boolean isSpectator() {
+        return spectator;
+    }
+
+    public void setSpectator(boolean spectator) {
+        this.spectator = spectator;
+    }
+    public String getSolutionWord() { return solutionWord;
+
+    }
+    public void setSolutionWord(String solutionWord) { 
+        this.solutionWord = solutionWord;
     }
 }

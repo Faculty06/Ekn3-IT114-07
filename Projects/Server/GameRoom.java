@@ -23,7 +23,7 @@ import Projects.Exceptions.PlayerNotFoundException;
 
 public class GameRoom extends BaseGameRoom {
     private static final int MAX_STRIKES = 6;
-    private static final int MAX_ROUNDS = 3;
+    private static final int MAX_ROUNDS = 5;
     private static final int POINTS_PER_LETTER = 1;
 
     // word and game state
@@ -51,7 +51,7 @@ public class GameRoom extends BaseGameRoom {
 
     // ---------- word list loading ----------
     private void loadWordList() {
-        final String RESOURCE = "/Assets/words.csv";
+        final String RESOURCE = "words.txt";
         try (InputStream is = getClass().getResourceAsStream(RESOURCE)) {
             if (is == null) {
                 info(String.format("Error: Could not find resource %s", RESOURCE));
@@ -88,7 +88,6 @@ public class GameRoom extends BaseGameRoom {
     /** {@inheritDoc} */
     @Override
     protected void onClientRemoved(ServerThread sp) {
-        // added after Summer 2024 Demo
         // Stops the timers so room can clean up
         LoggerUtil.INSTANCE.info("Player Removed, remaining: " + clientsInRoom.size());
         long removedClient = sp.getClientId();
@@ -104,11 +103,6 @@ public class GameRoom extends BaseGameRoom {
     }
 
     // timer handlers
-    private void startRoundTimer() {
-        roundTimer = new TimedEvent(30, () -> onRoundEnd());
-        roundTimer.setTickCallback((time) -> System.out.println("Round Time: " + time));
-    }
-
     private void resetRoundTimer() {
         if (roundTimer != null) {
             roundTimer.cancel();
@@ -117,7 +111,7 @@ public class GameRoom extends BaseGameRoom {
     }
 
     private void startTurnTimer() {
-        turnTimer = new TimedEvent(30, () -> onTurnEnd());
+        turnTimer = new TimedEvent(600, () -> onTurnEnd());
         turnTimer.setTickCallback((time) -> System.out.println("Turn Time: " + time));
     }
 
@@ -150,11 +144,12 @@ public class GameRoom extends BaseGameRoom {
         resetRoundTimer();
         resetTurnStatus();
         round++;
+         if (wordList.isEmpty()) {
+        LoggerUtil.INSTANCE.info("onRoundStart() aborted: word list is empty");
+        return;
+        }
         setupNewWord();
         relay(null, String.format("Round %d has started", round));
-        // startRoundTimer(); Round timers aren't needed for turns
-        // if you do decide to use it, ensure it's reasonable and based on the number of
-        // players
         LoggerUtil.INSTANCE.info("onRoundStart() end");
         onTurnStart();
     }
@@ -182,6 +177,7 @@ public class GameRoom extends BaseGameRoom {
     protected void onTurnEnd() {
         LoggerUtil.INSTANCE.info("onTurnEnd() start");
         resetTurnTimer(); // reset timer if turn ended without the time expiring
+        
         try {
             // optionally can use checkAllTookTurn();
             if (isLastPlayer()) {
@@ -219,6 +215,8 @@ public class GameRoom extends BaseGameRoom {
     @Override
     protected void onSessionEnd() {
         LoggerUtil.INSTANCE.info("onSessionEnd() start");
+        resetRoundTimer();
+        resetTurnTimer();
         syncScoreboard(true);
         relay(null, "Game Over");
 
@@ -319,6 +317,10 @@ public class GameRoom extends BaseGameRoom {
      * @throws PlayerNotFoundException
      */
     private ServerThread getNextPlayer() throws MissingCurrentPlayerException, PlayerNotFoundException {
+        if (turnOrder.isEmpty()) {
+        throw new MissingCurrentPlayerException("Turn order is empty");
+        }
+
         int index = 0;
         if (currentTurnClientId != Constants.DEFAULT_CLIENT_ID) {
             index = turnOrder.indexOf(getCurrentPlayer()) + 1;
@@ -342,22 +344,6 @@ public class GameRoom extends BaseGameRoom {
         // check if the current player is the last player in the turn order
         return turnOrder.indexOf(getCurrentPlayer()) == (turnOrder.size() - 1);
     }
-
-    private void checkAllTookTurn() {
-        int numReady = clientsInRoom.values().stream()
-                .filter(sp -> sp.isReady())
-                .toList().size();
-        int numTookTurn = clientsInRoom.values().stream()
-                // ensure to verify the isReady part since it's against the original list
-                .filter(sp -> sp.isReady() && sp.didTakeTurn())
-                .toList().size();
-        if (numReady == numTookTurn) {
-            relay(null,
-                    String.format("All players have taken their turn (%d/%d) ending the round", numTookTurn, numReady));
-            onRoundEnd();
-        }
-    }
-
     // start check methods
     private void checkCurrentPlayer(long clientId) throws NotPlayersTurnException {
         if (currentTurnClientId != clientId) {
@@ -422,8 +408,6 @@ public class GameRoom extends BaseGameRoom {
         relay(null, sb.toString());
     }
 
-
-
     protected void handleTurnAction(ServerThread currentUser, String exampleText) {
         // check if the client is in the room
         try {
@@ -458,7 +442,6 @@ public class GameRoom extends BaseGameRoom {
                         "Unknown game command. Use /guess <word>, /letter <char>, or /skip.");
                 onTurnEnd();
             }
-
 
         } catch (NotPlayersTurnException e) {
             currentUser.sendMessage(Constants.DEFAULT_CLIENT_ID, "It's not your turn");

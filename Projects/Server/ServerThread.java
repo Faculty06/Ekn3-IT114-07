@@ -17,7 +17,6 @@ import Projects.CommonFiles.RoomAction;
 import Projects.CommonFiles.RoomResultPayload;
 import Projects.CommonFiles.TextFX;
 import Projects.CommonFiles.TextFX.Color;
-import Projects.CommonFiles.GameStatePayload;
 
 /**
  * A server-side representation of a single client
@@ -152,6 +151,8 @@ public class ServerThread extends BaseServerThread {
      *                   sync)
      * @return true for successful send
      */
+
+    // syncing points
     public boolean sendPoints(long clientId, int points) {
         PointsPayload pp = new PointsPayload();
         pp.setClientId(clientId);
@@ -215,8 +216,8 @@ public class ServerThread extends BaseServerThread {
         payload.setClientId(clientId);
         return sendToClient(payload);
     }
-
     // End Send*() Methods
+
     @Override
     protected void processPayload(Payload incoming) {
 
