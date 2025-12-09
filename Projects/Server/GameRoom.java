@@ -22,9 +22,13 @@ import Projects.Exceptions.PhaseMismatchException;
 import Projects.Exceptions.PlayerNotFoundException;
 
 public class GameRoom extends BaseGameRoom {
-    private static final int MAX_STRIKES = 6;
+    private static final int MAX_STRIKES = 3;
     private static final int MAX_ROUNDS = 5;
     private static final int POINTS_PER_LETTER = 1;
+
+    // Configuration flags
+    private boolean removeStrikeOnCorrectGuess = false; // UPDATE: used in processGuess
+    private boolean hardMode = false;                   // UPDATE: used in processLetter
 
     // word and game state
     private final List<String> wordList = new ArrayList<>();
@@ -35,7 +39,8 @@ public class GameRoom extends BaseGameRoom {
 
     // per-player server-side wrapper
     private final ConcurrentHashMap<Long, SeverUser> users = new ConcurrentHashMap<>();
-     // used for general rounds (usually phase-based turns)
+
+    // used for general rounds (usually phase-based turns)
     private TimedEvent roundTimer = null;
 
     // used for granular turn handling (usually turn-order turns)
@@ -44,7 +49,7 @@ public class GameRoom extends BaseGameRoom {
     private long currentTurnClientId = Constants.DEFAULT_CLIENT_ID;
     private int round = 0;
 
-     public GameRoom(String name) {
+    public GameRoom(String name) {
         super(name);
         loadWordList();
     }
@@ -144,9 +149,9 @@ public class GameRoom extends BaseGameRoom {
         resetRoundTimer();
         resetTurnStatus();
         round++;
-         if (wordList.isEmpty()) {
-        LoggerUtil.INSTANCE.info("onRoundStart() aborted: word list is empty");
-        return;
+        if (wordList.isEmpty()) {
+            LoggerUtil.INSTANCE.info("onRoundStart() aborted: word list is empty");
+            return;
         }
         setupNewWord();
         relay(null, String.format("Round %d has started", round));
@@ -162,22 +167,20 @@ public class GameRoom extends BaseGameRoom {
         try {
             ServerThread currentPlayer = getNextPlayer();
             relay(null, String.format("It's %s's turn", currentPlayer.getDisplayName()));
+            sendTurnStatus(currentPlayer, currentPlayer.didTakeTurn());
         } catch (MissingCurrentPlayerException | PlayerNotFoundException e) {
-
             e.printStackTrace();
         }
         startTurnTimer();
         LoggerUtil.INSTANCE.info("onTurnStart() end");
     }
 
-    // Note: logic between Turn Start and Turn End is typically handled via timers
-    // and user interaction
     /** {@inheritDoc} */
     @Override
     protected void onTurnEnd() {
         LoggerUtil.INSTANCE.info("onTurnEnd() start");
         resetTurnTimer(); // reset timer if turn ended without the time expiring
-        
+
         try {
             // optionally can use checkAllTookTurn();
             if (isLastPlayer()) {
@@ -187,14 +190,11 @@ public class GameRoom extends BaseGameRoom {
                 onTurnStart();
             }
         } catch (MissingCurrentPlayerException | PlayerNotFoundException e) {
-
             e.printStackTrace();
         }
         LoggerUtil.INSTANCE.info("onTurnEnd() end");
     }
 
-    // Note: logic between Round Start and Round End is typically handled via timers
-    // and user interaction
     /** {@inheritDoc} */
     @Override
     protected void onRoundEnd() {
@@ -220,8 +220,17 @@ public class GameRoom extends BaseGameRoom {
         syncScoreboard(true);
         relay(null, "Game Over");
 
-        //reset server-side player data
-        users.values().forEach(u -> u.setPoints(0));
+        // reset server-side player data
+        users.values().forEach(u -> {
+            u.setPoints(0);
+            // UPDATE: if you want to fully reset between sessions, you can also:
+            // u.setReady(false);
+            // u.setTookTurn(false);
+            // u.setAway(false);
+            // u.setSpectator(false);
+            // u.setSolutionWord(null);
+        });
+
         strikes = 0;
         guessedLetters.clear();
         currentWord = null;
@@ -273,9 +282,7 @@ public class GameRoom extends BaseGameRoom {
 
     // misc methods
     private void resetTurnStatus() {
-        clientsInRoom.values().forEach(sp -> {
-            sp.setTookTurn(false);
-        });
+        clientsInRoom.values().forEach(sp -> sp.setTookTurn(false));
         sendResetTurnStatus();
     }
 
@@ -284,86 +291,74 @@ public class GameRoom extends BaseGameRoom {
      */
     private void setTurnOrder() {
         turnOrder.clear();
-        turnOrder = clientsInRoom.values().stream().filter(ServerThread::isReady).collect(Collectors.toList());
+        turnOrder = clientsInRoom.values().stream()
+                .filter(ServerThread::isReady)
+                .collect(Collectors.toList());
         Collections.shuffle(turnOrder);
     }
 
     /**
      * Gets the current player based on the `currentTurnClientId`.
-     * 
-     * @return
-     * @throws MissingCurrentPlayerException
-     * @throws PlayerNotFoundException
      */
     private ServerThread getCurrentPlayer() throws MissingCurrentPlayerException, PlayerNotFoundException {
-        // quick early exit
         if (currentTurnClientId == Constants.DEFAULT_CLIENT_ID) {
             throw new MissingCurrentPlayerException("Current Player not set");
         }
         return turnOrder.stream()
                 .filter(sp -> sp.getClientId() == currentTurnClientId)
                 .findFirst()
-                // this shouldn't occur but is included as a "just in case"
                 .orElseThrow(() -> new PlayerNotFoundException("Current player not found in turn order"));
     }
 
     /**
-     * Gets the next player in the turn order.
-     * If the current player is the last in the turn order, it wraps around
-     * (round-robin).
-     * 
-     * @return
-     * @throws MissingCurrentPlayerException
-     * @throws PlayerNotFoundException
+     * Gets the next player in the turn order, skipping "away" players.
      */
     private ServerThread getNextPlayer() throws MissingCurrentPlayerException, PlayerNotFoundException {
         if (turnOrder.isEmpty()) {
-        throw new MissingCurrentPlayerException("Turn order is empty");
+            throw new MissingCurrentPlayerException("Turn order is empty");
         }
 
         int index = 0;
         if (currentTurnClientId != Constants.DEFAULT_CLIENT_ID) {
             index = turnOrder.indexOf(getCurrentPlayer()) + 1;
-            if (index >= turnOrder.size()) {
-                index = 0;
-            }
         }
+        if (index >= turnOrder.size()) {
+            index = 0;
+        }
+
+        // UPDATE: skip away players based on SeverUser.away flag
+        int visited = 0;
+        while (visited < turnOrder.size()) {
+            ServerThread candidate = turnOrder.get(index);
+            SeverUser su = getOrCreateUser(candidate.getClientId());
+            boolean isAway = (su != null && su.isAway());
+            if (!isAway) {
+                currentTurnClientId = candidate.getClientId();
+                return candidate;
+            }
+            index = (index + 1) % turnOrder.size();
+            visited++;
+        }
+
+        // all away? just fall back to index
         ServerThread nextPlayer = turnOrder.get(index);
         currentTurnClientId = nextPlayer.getClientId();
         return nextPlayer;
     }
 
-    /**
-     * Checks if the current player is the last player in the turn order.
-     * 
-     * @return
-     * @throws MissingCurrentPlayerException
-     * @throws PlayerNotFoundException
-     */
     private boolean isLastPlayer() throws MissingCurrentPlayerException, PlayerNotFoundException {
-        // check if the current player is the last player in the turn order
         return turnOrder.indexOf(getCurrentPlayer()) == (turnOrder.size() - 1);
     }
-    // start check methods
+
     private void checkCurrentPlayer(long clientId) throws NotPlayersTurnException {
         if (currentTurnClientId != clientId) {
             throw new NotPlayersTurnException("You are not the current player");
         }
     }
 
-    // end check methods
+    // word & scoreboard helpers
 
-    // receive data from ServerThread (GameRoom specific)
-
-    /**
-     * Handles the turn action from the client.
-     * 
-     * @param currentUser
-     * @param exampleText (arbitrary text from the client, can be used for
-     *                    additional actions or information)
-     */
-
-     private void setupNewWord() {
+    private void setupNewWord() {
         if (wordList.isEmpty()) {
             relay(null, "Error: Word list is empty. Ending session.");
             onSessionEnd();
@@ -371,8 +366,9 @@ public class GameRoom extends BaseGameRoom {
         }
         currentWord = wordList.get(new Random().nextInt(wordList.size())).toUpperCase();
         currentBlanks = new char[currentWord.length()];
-        for (int i = 0; i < currentBlanks.length; i++)
+        for (int i = 0; i < currentBlanks.length; i++) {
             currentBlanks[i] = '_';
+        }
         strikes = 0;
         guessedLetters.clear();
         syncBlanksAndStrikes();
@@ -388,28 +384,29 @@ public class GameRoom extends BaseGameRoom {
 
     private void syncBlanksAndStrikes() {
         String blanks = new String(currentBlanks);
-        // use GameStatePayload via ServerThread helper
         clientsInRoom.values().forEach(st -> st.sendGameState(blanks, strikes, MAX_STRIKES));
     }
 
     private boolean isWordComplete() {
-        for (char c : currentBlanks)
-            if (c == '_')
-                return false;
+        for (char c : currentBlanks) {
+            if (c == '_') return false;
+        }
         return true;
     }
 
     private void syncScoreboard(boolean isFinal) {
         List<SeverUser> sorted = users.values().stream()
-                .sorted((a, b) -> Integer.compare(b.getPoints(), a.getPoints())).collect(Collectors.toList());
+                .sorted((a, b) -> Integer.compare(b.getPoints(), a.getPoints()))
+                .collect(Collectors.toList());
         StringBuilder sb = new StringBuilder(isFinal ? "\n*** FINAL SCOREBOARD ***\n" : "\n*** Current SCOREBOARD ***\n");
         sorted.forEach(p -> sb.append(String.format("%s: %d\n", p.getClientName(), p.getPoints())));
         sb.append("**************************");
         relay(null, sb.toString());
     }
 
+    // ---------- receive data from ServerThread (GameRoom specific) ----------
+
     protected void handleTurnAction(ServerThread currentUser, String exampleText) {
-        // check if the client is in the room
         try {
             checkPlayerInRoom(currentUser);
             checkCurrentPhase(currentUser, Phase.IN_PROGRESS);
@@ -426,8 +423,37 @@ public class GameRoom extends BaseGameRoom {
                 currentUser.sendMessage(Constants.DEFAULT_CLIENT_ID, "No command provided.");
                 onTurnEnd();
                 return;
-            } 
-             String command = exampleText.toLowerCase().trim();
+            }
+
+            String command = exampleText.toLowerCase().trim();
+
+            // UPDATE
+            if (command.startsWith("/config")) {
+                // Example format: /config removeStrike=true hardMode=false
+                String[] parts = command.split("\\s+");
+                for (int i = 1; i < parts.length; i++) {
+                    String[] kv = parts[i].split("=");
+                    if (kv.length == 2) {
+                        String key = kv[0].toLowerCase();
+                        String val = kv[1].toLowerCase();
+                        boolean flag = "true".equals(val);
+                        if ("removestrike".equals(key)) {
+                            removeStrikeOnCorrectGuess = flag;
+                        } else if ("hardmode".equals(key)) {
+                            hardMode = flag;
+                        }
+                    }
+                }
+                relay(null, String.format(
+                        "%s updated configuration: removeStrike=%s, hardMode=%s",
+                        currentUser.getDisplayName(),
+                        removeStrikeOnCorrectGuess, hardMode));
+
+                // config change does NOT count as taking a turn
+                currentUser.setTookTurn(false);
+                sendTurnStatus(currentUser, currentUser.didTakeTurn());
+                return;
+            }
 
             if (command.startsWith("/guess")) {
                 String wordGuess = command.substring(6).trim();
@@ -437,9 +463,11 @@ public class GameRoom extends BaseGameRoom {
                 processLetter(currentUser, letterGuess);
             } else if (command.equals("/skip")) {
                 processSkip(currentUser);
+            } else if (command.equals("/away") || command.equals("/back")) { // UPDATE: away/back support
+                processAwayBack(currentUser, command.equals("/away"));
             } else {
                 currentUser.sendMessage(Constants.DEFAULT_CLIENT_ID,
-                        "Unknown game command. Use /guess <word>, /letter <char>, or /skip.");
+                        "Unknown game command. Use /guess <word>, /letter <char>, /skip, /away, or /back.");
                 onTurnEnd();
             }
 
@@ -447,7 +475,6 @@ public class GameRoom extends BaseGameRoom {
             currentUser.sendMessage(Constants.DEFAULT_CLIENT_ID, "It's not your turn");
             LoggerUtil.INSTANCE.severe("handleTurnAction exception", e);
         } catch (NotReadyException e) {
-            // The check method already informs the currentUser
             LoggerUtil.INSTANCE.severe("handleTurnAction exception", e);
         } catch (PlayerNotFoundException e) {
             currentUser.sendMessage(Constants.DEFAULT_CLIENT_ID, "You must be in a GameRoom to do the ready check");
@@ -460,7 +487,28 @@ public class GameRoom extends BaseGameRoom {
             LoggerUtil.INSTANCE.severe("handleTurnAction exception", e);
         }
     }
-    
+
+    // UPDATE: new helper for /away and /back
+    private void processAwayBack(ServerThread currentUser, boolean away) {
+        SeverUser su = getOrCreateUser(currentUser.getClientId());
+        if (su == null) {
+            currentUser.sendMessage(Constants.DEFAULT_CLIENT_ID, "Player data unavailable");
+            return;
+        }
+
+        su.setAway(away);
+        String message = away
+                ? String.format("%s is away", currentUser.getDisplayName())
+                : String.format("%s is no longer away", currentUser.getDisplayName());
+        relay(null, message);
+        if (away && currentUser.getClientId() == currentTurnClientId) {
+        onTurnEnd();
+        }
+
+        // Full sync of away status to all clients would ideally be done via a
+        // SYNC_CLIENT-style payload; here we at least broadcast the message for UI.
+    }
+
     private void processGuess(ServerThread guesserThread, String wordGuess) {
         if (wordGuess == null || wordGuess.isBlank()) {
             guesserThread.sendMessage(Constants.DEFAULT_CLIENT_ID, "Usage: /guess <word>");
@@ -480,6 +528,11 @@ public class GameRoom extends BaseGameRoom {
             int missingLetters = (int) new String(currentBlanks).chars().filter(c -> c == '_').count();
             int pointsEarned = missingLetters * 2;
             guesser.setPoints(guesser.getPoints() + pointsEarned);
+
+            // UPDATE: optional config – remove one strike on correct guess
+            if (removeStrikeOnCorrectGuess && strikes > 0) {
+                strikes--;
+            }
 
             // sync points to all clients
             clientsInRoom.values().forEach(c -> c.sendPoints(guesser.getClientId(), guesser.getPoints()));
@@ -512,9 +565,33 @@ public class GameRoom extends BaseGameRoom {
         }
 
         char letter = Character.toUpperCase(letterGuess.charAt(0));
+
+        // UPDATE: hard mode behavior when guessing a letter that's already been guessed
         if (guessedLetters.contains(letter)) {
-            guesserThread.sendMessage(Constants.DEFAULT_CLIENT_ID, "Letter already guessed: " + letter);
-            onTurnEnd();
+            SeverUser guesser = getOrCreateUser(guesserThread.getClientId());
+            if (guesser == null) {
+                guesserThread.sendMessage(Constants.DEFAULT_CLIENT_ID, "Player data unavailable");
+                onTurnEnd();
+                return;
+            }
+
+            if (hardMode) {
+                // In hard mode, allow repeats but treat as a miss (incurs a strike)
+                strikes++;
+                syncBlanksAndStrikes();
+                relay(null, String.format(
+                        "X %s guessed %s again and it still wasn't in the word",
+                        guesser.getClientName(), letter));
+                if (strikes >= MAX_STRIKES) {
+                    onRoundEnd();
+                } else {
+                    onTurnEnd();
+                }
+            } else {
+                // Normal mode: block repeated guesses
+                guesserThread.sendMessage(Constants.DEFAULT_CLIENT_ID, "Letter already guessed: " + letter);
+                onTurnEnd();
+            }
             return;
         }
 
@@ -553,7 +630,8 @@ public class GameRoom extends BaseGameRoom {
         } else {
             strikes++;
             syncBlanksAndStrikes();
-            relay(null, String.format("X %s guessed %s and it wasn't in the word", guesser.getClientName(), letter));
+            relay(null, String.format("X %s guessed %s and it wasn't in the word",
+                    guesser.getClientName(), letter));
             if (strikes >= MAX_STRIKES) {
                 onRoundEnd();
             } else {
@@ -566,5 +644,4 @@ public class GameRoom extends BaseGameRoom {
         relay(null, String.format("%s skipped their turn", skipper.getDisplayName()));
         onTurnEnd();
     }
-    // end receive data from ServerThread (GameRoom specific)
 }

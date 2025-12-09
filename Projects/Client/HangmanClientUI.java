@@ -54,6 +54,7 @@ class HangmanClientFrame extends JFrame {
     private Phase lastPhase = null;
     private String lastTurnMessageSeen = null;
     private final Map<Long, Integer> lastPointsSeen = new HashMap<>();
+    private long lastTurnClientIdSeen = -1L;
 
     // Configuration toggles set in Ready screen
     private boolean removeStrikeOnCorrectGuess = false;
@@ -103,11 +104,13 @@ class HangmanClientFrame extends JFrame {
      *  - user list / points / away/spectator
      *  - game state (strikes, hidden word)
      *  - latest turn (guess history, whose turn)
+     *  - generic game events (from MESSAGE payloads)
      */
     private void pollClientState(ActionEvent e) {
         // If not connected, always show Connect screen
         if (!client.isConnected()) {
             lastPhase = null;       // reset so when we do connect, phase changes are noticed
+            lastTurnClientIdSeen = -1L;
             showConnect();
             return;
         }
@@ -137,6 +140,7 @@ class HangmanClientFrame extends JFrame {
         gamePanel.updateUserList(users, currentTurnId);
         readyPanel.updateUserList(users);
 
+        // 2a. points changes -> log to events
         for (User u : users) {
             int newPoints = u.getPoints();
             Integer oldPoints = lastPointsSeen.get(u.getClientId());
@@ -149,13 +153,30 @@ class HangmanClientFrame extends JFrame {
             }
         }
 
+        // 2b. Turn owner change -> update label + start countdown
+        if (currentTurnId != lastTurnClientIdSeen && currentTurnId != 0L && currentTurnId != -1L) {
+            lastTurnClientIdSeen = currentTurnId;
+
+            User turnUser = map.get(currentTurnId);
+            String name = (turnUser != null)
+                    ? turnUser.getClientName()
+                    : ("#" + currentTurnId);
+
+            gamePanel.setCurrentTurnLabel(name);
+        }
+
         // 3. Update game state (strikes + word blanks)
         GameStatePayload gsp = client.getLatestGameState();
         if (gsp != null) {
             gamePanel.updateGameState(gsp, hardMode, joinAsSpectator);
         }
 
-        // 4. Turn / guess history + whose turn
+        // 4. Generic game events from server (MESSAGE payloads)
+        for (String message : client.drainGameEvents()) {
+            gamePanel.appendEvent(message);
+        }
+
+        // 5. Turn / guess history + turn-related events
         String lastTurn = client.getLastTurnMessage();
         if (lastTurn != null && !lastTurn.equals(lastTurnMessageSeen)) {
             lastTurnMessageSeen = lastTurn;
@@ -166,27 +187,53 @@ class HangmanClientFrame extends JFrame {
 
             // In hard mode, don't show guess history in the Game Events panel
             if (!hardMode) {
-                if ("/skip".equalsIgnoreCase(lastTurn)) {
+                // lastTurn is the raw command string from the client, e.g.
+                // "/skip", "/letter A", "/guess apple", "/away", "/back"
+                String cmd = lastTurn.trim().toLowerCase();
+
+                if (cmd.startsWith("/skip")) {
                     gamePanel.appendEvent(String.format("%s skipped their turn", name));
-                } else if (lastTurn.startsWith("/config")) {
-                    // handled logically at ReadyCheck level only
-                } else if (lastTurn.length() == 1) {
+
+                } else if (cmd.startsWith("/config")) {
+                    // Config messages handled by scoreboard/events, no extra UI text here
+
+                } else if (cmd.startsWith("/letter")) {
+                    // Extract the letter after "/letter"
+                    String[] parts = lastTurn.trim().split("\\s+");
+                    String letterShown = (parts.length >= 2) ? parts[1].toUpperCase() : "?";
                     gamePanel.appendEvent(
                             String.format("%s guessed letter '%s'",
-                                    name, lastTurn.toUpperCase()));
-                    gamePanel.disableLetter(lastTurn.toUpperCase().charAt(0));
-                } else if (lastTurn.startsWith("/away")) {
+                                    name, letterShown));
+                    if (letterShown.length() == 1) {
+                        gamePanel.disableLetter(letterShown.charAt(0));
+                    }
+
+                } else if (cmd.startsWith("/away")) {
+                    if (turnUser != null) {
+                        turnUser.setAway(true);   // keep User model in sync
+                    }
                     gamePanel.appendEvent(String.format("%s is away", name));
-                } else if (lastTurn.startsWith("/back")) {
+
+                } else if (cmd.startsWith("/back")) {
+                    if (turnUser != null) {
+                        turnUser.setAway(false);  // keep User model in sync
+                    }
                     gamePanel.appendEvent(String.format("%s is no longer away", name));
-                } else {
+
+                } else if (cmd.startsWith("/guess")) {
+                    // Extract the word after "/guess"
+                    String[] parts = lastTurn.trim().split("\\s+", 2);
+                    String guessedWord = (parts.length >= 2) ? parts[1] : "";
                     gamePanel.appendEvent(
                             String.format("%s guessed word \"%s\"",
+                                    name, guessedWord));
+                } else {
+                    // Fallback for any other turn text
+                    gamePanel.appendEvent(
+                            String.format("%s performed action: %s",
                                     name, lastTurn));
                 }
             }
-
-            gamePanel.setCurrentTurnLabel(name);
         }
     }
 
@@ -473,9 +520,9 @@ class HangmanClientFrame extends JFrame {
             chatPanel.add(chatInput, BorderLayout.SOUTH);
 
             chatInput.addActionListener(e -> {
-                String msg = chatInput.getText().trim();
-                if (!msg.isEmpty()) {
-                    client.sendChatFromUI(msg);
+                String message = chatInput.getText().trim();
+                if (!message.isEmpty()) {
+                    client.sendChatFromUI(message);
                     chatInput.setText("");
                 }
             });
@@ -573,11 +620,8 @@ class HangmanClientFrame extends JFrame {
 
         void setCurrentTurnLabel(String name) {
             currentTurnLabel.setText("Current turn: " + name);
-
-            User me = client.getMyUser();
-            if (me != null && name.equals(me.getClientName())) {
-                startTurnTimer(30); // 30s per turn, adjustable
-            }
+            // start/restart turn countdown every time a new turn owner is set
+            startTurnTimer(600); 
         }
 
         private void startTurnTimer(int seconds) {
@@ -658,7 +702,6 @@ class UserTableModel extends AbstractTableModel {
             case 3:
                 return u.getPoints();
             case 4:
-                // These methods need to exist on User
                 if (u.isSpectator()) return "Spectator";
                 if (u.isAway()) return "Away";
                 if (u.isReady()) return "Ready";
