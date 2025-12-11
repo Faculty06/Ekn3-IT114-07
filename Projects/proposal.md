@@ -22,5 +22,5 @@
 
 
 - Demo Link
-  -https://youtu.be/eFHJv71VnHU Full walkthrough link (updated version)
+  -https://youtu.be/SJhGlZL_UZE Full walkthrough link (updated version)
   - https://youtu.be/QV02XrtaytM  (old Version)
