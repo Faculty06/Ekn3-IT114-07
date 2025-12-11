@@ -160,11 +160,14 @@ public class ServerThread extends BaseServerThread {
         return sendToClient(pp);
     }
 
-    public boolean sendGameState(String hiddenWord, int currentStrikes, int maxStrikes) {
+    public boolean sendGameState(String hiddenWord, int currentStrikes, int maxStrikes,boolean hardMode, boolean removeStrikeOnCorrectGuess) {
         Projects.CommonFiles.GameStatePayload gsp = new Projects.CommonFiles.GameStatePayload();
         gsp.setHiddenWord(hiddenWord);
         gsp.setCurrentStrikes(currentStrikes);
         gsp.setMaxStrikes(maxStrikes);
+        gsp.setHardMode(hardMode);
+        gsp.setRemoveStrikeOnCorrectGuess(removeStrikeOnCorrectGuess);
+
         return sendToClient(gsp);
     }
     protected boolean sendClientInfo(long clientId, String clientName, RoomAction action, boolean isSync) {

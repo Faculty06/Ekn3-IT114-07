@@ -61,6 +61,9 @@ class HangmanClientFrame extends JFrame {
     boolean hardMode = false;          // package-private so GamePanel can see it
     private boolean joinAsSpectator = false; // currently local-only; server spectator comes from User
 
+    // NEW: track current username for the window title
+    private String currentUsername = "";
+
     HangmanClientFrame(Client client) {
         super("Hangman Client");
         this.client = client;
@@ -99,6 +102,19 @@ class HangmanClientFrame extends JFrame {
     }
 
     /**
+     * NEW: Set the username and update the JFrame title bar.
+     * Called after a successful connect (and when disconnecting, with empty string).
+     */
+    private void setUsernameAndUpdateTitle(String username) {
+        this.currentUsername = (username == null) ? "" : username.trim();
+        if (this.currentUsername.isEmpty()) {
+            setTitle("Hangman Client");
+        } else {
+            setTitle("Hangman Client - " + this.currentUsername);
+        }
+    }
+
+    /**
      * Periodically called to sync UI with Client state:
      *  - phase changes
      *  - user list / points / away/spectator
@@ -111,6 +127,8 @@ class HangmanClientFrame extends JFrame {
         if (!client.isConnected()) {
             lastPhase = null;       // reset so when we do connect, phase changes are noticed
             lastTurnClientIdSeen = -1L;
+            // Reset title when disconnected
+            setUsernameAndUpdateTitle("");
             showConnect();
             return;
         }
@@ -184,12 +202,26 @@ class HangmanClientFrame extends JFrame {
         // 3. Update game state (strikes + word blanks)
         GameStatePayload gsp = client.getLatestGameState();
         if (gsp != null) {
-            gamePanel.updateGameState(gsp, hardMode, joinAsSpectator);
+            // Get config from GameStatePayload
+            boolean gameHardMode = gsp.isHardMode();
+            boolean gameRemoveStrike = gsp.isRemoveStrikeOnCorrectGuess();
+            
+            // Update local config
+            this.hardMode = gameHardMode;
+            this.removeStrikeOnCorrectGuess = gameRemoveStrike;
+            
+            gamePanel.updateGameState(gsp, gameHardMode, joinAsSpectator);
         }
 
         // 4. Generic game events from server (MESSAGE payloads)
         for (String message : client.drainGameEvents()) {
+            // Always append to the Game Events panel in the Game screen
             gamePanel.appendEvent(message);
+
+            // NEW: if we're in Ready phase, also show the message on the Ready screen
+            if (currentPhase == Phase.READY) {
+                readyPanel.setStatusMessage(message);
+            }
         }
 
         // 5. Turn / guess history + turn-related events
@@ -220,7 +252,7 @@ class HangmanClientFrame extends JFrame {
                     gamePanel.appendEvent(
                             String.format("%s guessed letter '%s'",
                                     name, letterShown));
-                    if (letterShown.length() == 1) {
+                    if (!hardMode && letterShown.length() == 1) {
                         gamePanel.disableLetter(letterShown.charAt(0));
                     }
 
@@ -346,6 +378,9 @@ class HangmanClientFrame extends JFrame {
                 return;
             }
 
+            // NEW: update window title with the connected username
+            setUsernameAndUpdateTitle(username);
+
             // NOTE: actual spectator registration should be implemented
             // on the server side (e.g. via a special payload or command).
             // For now, we trust the server to flag User.isSpectator() correctly.
@@ -370,6 +405,9 @@ class HangmanClientFrame extends JFrame {
 
         private final JTable userTable;
         private final UserTableModel tableModel;
+
+        // NEW: status label to show server messages during Ready Check
+        private final JLabel statusLabel = new JLabel(" ", SwingConstants.CENTER);
 
         ReadyPanel() {
             setLayout(new BorderLayout(10, 10));
@@ -398,13 +436,19 @@ class HangmanClientFrame extends JFrame {
             add(top, BorderLayout.NORTH);
             add(new JScrollPane(userTable), BorderLayout.CENTER);
 
-            JPanel bottom = new JPanel(new FlowLayout(FlowLayout.CENTER));
-            bottom.add(readyButton);
+            // Bottom area: Ready button + status label
+            JPanel bottom = new JPanel(new BorderLayout());
+            JPanel buttonRow = new JPanel(new FlowLayout(FlowLayout.CENTER));
+            buttonRow.add(readyButton);
+            bottom.add(buttonRow, BorderLayout.NORTH);
+            bottom.add(statusLabel, BorderLayout.SOUTH);
             add(bottom, BorderLayout.SOUTH);
 
             // Hard mode is host-only; start disabled until we know we're host
             hardModeCheck.setEnabled(false);
             hardModeCheck.setToolTipText("Only the host can toggle hard mode.");
+            removeStrikeCheck.setEnabled(false);
+            removeStrikeCheck.setToolTipText("Only the host can toggle remove strike on correct guess.");
 
             // ---- Button actions ----
 
@@ -433,15 +477,19 @@ class HangmanClientFrame extends JFrame {
             });
 
             readyButton.addActionListener(e -> {
-                removeStrikeOnCorrectGuess = removeStrikeCheck.isSelected();
-                hardMode = hardModeCheck.isSelected();
-                client.sendConfigFromUI(removeStrikeOnCorrectGuess, hardMode);
+                if (client.isHost()) {
+                    removeStrikeOnCorrectGuess = removeStrikeCheck.isSelected();
+                    hardMode = hardModeCheck.isSelected();
+                    client.sendConfigFromUI(removeStrikeOnCorrectGuess, hardMode);
+                }
                 client.toggleReadyFromUI();
             });
         }
 
         void resetReadyButton() {
             readyButton.setText("Mark Ready");
+            // Clear any old status message when we re-enter Ready phase
+            statusLabel.setText(" ");
         }
 
         void updateUserList(List<User> users) {
@@ -453,10 +501,13 @@ class HangmanClientFrame extends JFrame {
          */
         void updateHostControls(boolean isHost) {
             hardModeCheck.setEnabled(isHost);
+            removeStrikeCheck.setEnabled(isHost);
             if (isHost) {
                 hardModeCheck.setToolTipText(null);
+                removeStrikeCheck.setToolTipText(null);
             } else {
                 hardModeCheck.setToolTipText("Only the host can toggle hard mode.");
+                removeStrikeCheck.setToolTipText("Only the host can toggle remove strike on correct guess.");
             }
         }
 
@@ -477,6 +528,17 @@ class HangmanClientFrame extends JFrame {
          */
         void setHostClientId(long hostId) {
             tableModel.setHostClientId(hostId);
+        }
+
+        /**
+         * NEW: set a status message shown at the bottom of the Ready screen.
+         */
+        void setStatusMessage(String msg) {
+            if (msg == null || msg.trim().isEmpty()) {
+                statusLabel.setText(" ");
+            } else {
+                statusLabel.setText(msg);
+            }
         }
     }
 
@@ -517,7 +579,7 @@ class HangmanClientFrame extends JFrame {
             left.add(new JLabel("Players", SwingConstants.CENTER), BorderLayout.NORTH);
             left.add(new JScrollPane(userTable), BorderLayout.CENTER);
             left.add(awayCheck, BorderLayout.SOUTH);
-            awayCheck.addActionListener(e ->
+            awayCheck.addActionListener(e -> 
                     client.setAwayFromUI(awayCheck.isSelected()));
 
             // ---------- CENTER: Hangman + word + letters + word guess + timer ----------
@@ -623,6 +685,7 @@ class HangmanClientFrame extends JFrame {
                     }
                     char letter = btn.getText().charAt(0);
                     client.guessLetterFromUI(letter);
+                    // Only disable in normal mode
                     if (!hardMode) {
                         btn.setEnabled(false);
                     }
@@ -671,19 +734,20 @@ class HangmanClientFrame extends JFrame {
         void updateGameState(GameStatePayload gsp, boolean hardMode, boolean spectatorMode) {
             String hidden = (gsp.getHiddenWord() != null) ? gsp.getHiddenWord() : "";
             wordLabel.setText(hidden);
-
+            
             hangmanPanel.setStrikes(gsp.getCurrentStrikes(), gsp.getMaxStrikes());
-
+            
             // If strikes reset, treat as new round (letters re-enabled)
             if (gsp.getCurrentStrikes() == 0) {
                 buildLettersPanel();
             }
-
-            // Spectators: disable interactive guess controls on the UI
+            
+            // Hard mode: don't disable letters after they're guessed
+            // Spectators: disable interactive guess controls
             boolean canPlay = !spectatorMode;
             for (JButton btn : letterButtons.values()) {
-                // in hard mode they re-disable after click, but spectators should always be disabled
-                btn.setEnabled(canPlay && (!hardMode));
+                // In hard mode, letters stay enabled; in normal mode, they get disabled when guessed
+                btn.setEnabled(canPlay && (!hardMode || btn.isEnabled()));
             }
             wordGuessField.setEnabled(canPlay);
             wordGuessButton.setEnabled(canPlay);
@@ -729,8 +793,8 @@ class HangmanClientFrame extends JFrame {
  * Table model for user list used in both ReadyPanel and GamePanel.
  *
  * Columns:
- *  - Turn marker
- *  - Username (with "(Host)" tag for host)
+ *  - Turn
+ *  - User (with "(Host)" tag for host)
  *  - ID
  *  - Points
  *  - Status (Ready / Away / Spectator)

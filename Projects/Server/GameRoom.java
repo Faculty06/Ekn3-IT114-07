@@ -26,7 +26,7 @@ public class GameRoom extends BaseGameRoom {
     private static final int MAX_ROUNDS = 5;
     private static final int POINTS_PER_LETTER = 1;
 
-    // Configuration flags
+    // Configuration flags (controlled via /config from the host)
     private boolean removeStrikeOnCorrectGuess = false; // used in processGuess
     private boolean hardMode = false;                   // used in processLetter
 
@@ -88,6 +88,10 @@ public class GameRoom extends BaseGameRoom {
         syncCurrentPhase(sp);
         syncReadyStatus(sp);
         syncTurnStatus(sp);
+        // Send initial game state if in progress
+        if (currentPhase == Phase.IN_PROGRESS && currentWord != null) {
+            syncBlanksAndStrikes();
+        }
     }
 
     /** {@inheritDoc} */
@@ -97,6 +101,7 @@ public class GameRoom extends BaseGameRoom {
         LoggerUtil.INSTANCE.info("Player Removed, remaining: " + clientsInRoom.size());
         long removedClient = sp.getClientId();
         turnOrder.removeIf(player -> player.getClientId() == sp.getClientId());
+        users.remove(sp.getClientId());
         if (clientsInRoom.isEmpty()) {
             resetReadyTimer();
             resetTurnTimer();
@@ -237,6 +242,8 @@ public class GameRoom extends BaseGameRoom {
         currentBlanks = new char[0];
         turnOrder.clear();
         currentTurnClientId = Constants.DEFAULT_CLIENT_ID;
+        removeStrikeOnCorrectGuess = false;
+        hardMode = false;
         resetReadyStatus();
         resetTurnStatus();
         changePhase(Phase.READY);
@@ -390,20 +397,26 @@ public class GameRoom extends BaseGameRoom {
     /**
      * Syncs the visible word + strikes to all clients.
      *
-     * - Players (non-spectators) see blanks / partial word.
+     * - Players (ready) see blanks / partial word.
      * - Spectators see the full correct word.
+     * - Also includes config flags (hardMode, removeStrikeOnCorrectGuess)
+     *   so all clients share the same game mode.
      */
     private void syncBlanksAndStrikes() {
-    String blanks = new String(currentBlanks);
+        String blanks = new String(currentBlanks);
 
-    clientsInRoom.values().forEach(st -> {
-        // Players (ready) see blanks, spectators see full word
-        String wordForThisClient = st.isReady() ? blanks : currentWord;
+        clientsInRoom.values().forEach(st -> {
+            // Players (ready) see blanks, spectators see full word
+            String wordForThisClient = st.isReady() ? blanks : currentWord;
 
-        st.sendGameState(wordForThisClient, strikes, MAX_STRIKES);
-    });
-}
-
+            st.sendGameState(
+                    wordForThisClient,
+                    strikes,
+                    MAX_STRIKES,
+                    hardMode,
+                    removeStrikeOnCorrectGuess);
+        });
+    }
 
     private boolean isWordComplete() {
         for (char c : currentBlanks) {
@@ -424,9 +437,60 @@ public class GameRoom extends BaseGameRoom {
 
     // ---------- receive data from ServerThread (GameRoom specific) ----------
 
+    /**
+     * Handles game-related commands (/config, /guess, /letter, /skip, /away, /back).
+     *
+     * - /config is allowed during READY or IN_PROGRESS and does NOT count as a turn.
+     * - /guess, /letter, /skip, /away, /back require IN_PROGRESS and current player's turn.
+     */
     protected void handleTurnAction(ServerThread currentUser, String exampleText) {
         try {
             checkPlayerInRoom(currentUser);
+
+            if (exampleText == null || exampleText.isBlank()) {
+                currentUser.sendMessage(Constants.DEFAULT_CLIENT_ID, "No command provided.");
+                return;
+            }
+
+            String commandRaw = exampleText.trim();
+            String command = commandRaw.toLowerCase();
+
+            // ---------------------------------------------------
+            // CONFIG: allowed in READY or IN_PROGRESS, does NOT
+            // count as taking a turn, and does NOT require it to
+            // be your turn. Only the host should really use this.
+            // ---------------------------------------------------
+            if (command.startsWith("/config")) {
+                // /config removeStrike=<true/false> hardMode=<true/false>
+                String[] parts = command.split("\\s+");
+                for (int i = 1; i < parts.length; i++) {
+                    String[] kv = parts[i].split("=");
+                    if (kv.length == 2) {
+                        String key = kv[0].toLowerCase();
+                        String val = kv[1].toLowerCase();
+                        boolean flag = "true".equals(val);
+                        if ("removestrike".equals(key)) {
+                            removeStrikeOnCorrectGuess = flag;
+                        } else if ("hardmode".equals(key)) {
+                            hardMode = flag;
+                        }
+                    }
+                }
+
+                relay(null, String.format(
+                        "%s updated configuration: removeStrike=%s, hardMode=%s",
+                        currentUser.getDisplayName(),
+                        removeStrikeOnCorrectGuess, hardMode));
+
+                // Immediately push the new config to all clients
+                syncBlanksAndStrikes();
+
+                return; // important: don't fall through into turn logic
+            }
+
+            // ---------------------------------------------------
+            // From here on down: real game commands
+            // ---------------------------------------------------
             checkCurrentPhase(currentUser, Phase.IN_PROGRESS);
             checkCurrentPlayer(currentUser.getClientId());
             checkIsReady(currentUser);
@@ -445,46 +509,11 @@ public class GameRoom extends BaseGameRoom {
             currentUser.setTookTurn(true);
             sendTurnStatus(currentUser, currentUser.didTakeTurn());
 
-            if (exampleText == null || exampleText.isBlank()) {
-                currentUser.sendMessage(Constants.DEFAULT_CLIENT_ID, "No command provided.");
-                onTurnEnd();
-                return;
-            }
-
-            String command = exampleText.toLowerCase().trim();
-
-            // /config removeStrike=<true/false> hardMode=<true/false>
-            if (command.startsWith("/config")) {
-                String[] parts = command.split("\\s+");
-                for (int i = 1; i < parts.length; i++) {
-                    String[] kv = parts[i].split("=");
-                    if (kv.length == 2) {
-                        String key = kv[0].toLowerCase();
-                        String val = kv[1].toLowerCase();
-                        boolean flag = "true".equals(val);
-                        if ("removestrike".equals(key)) {
-                            removeStrikeOnCorrectGuess = flag;
-                        } else if ("hardmode".equals(key)) {
-                            hardMode = flag;
-                        }
-                    }
-                }
-                relay(null, String.format(
-                        "%s updated configuration: removeStrike=%s, hardMode=%s",
-                        currentUser.getDisplayName(),
-                        removeStrikeOnCorrectGuess, hardMode));
-
-                // config change does NOT count as taking a turn
-                currentUser.setTookTurn(false);
-                sendTurnStatus(currentUser, currentUser.didTakeTurn());
-                return;
-            }
-
             if (command.startsWith("/guess")) {
-                String wordGuess = command.substring(6).trim();
+                String wordGuess = commandRaw.substring(6).trim(); // keep original case for display if desired
                 processGuess(currentUser, wordGuess);
             } else if (command.startsWith("/letter")) {
-                String letterGuess = command.substring(7).trim();
+                String letterGuess = commandRaw.substring(7).trim();
                 processLetter(currentUser, letterGuess);
             } else if (command.equals("/skip")) {
                 processSkip(currentUser);
@@ -546,13 +575,14 @@ public class GameRoom extends BaseGameRoom {
             return;
         }
 
+        String originalGuess = wordGuess; // keep original casing if you ever want it in messages
         wordGuess = wordGuess.toUpperCase();
         if (wordGuess.equals(currentWord)) {
             int missingLetters = (int) new String(currentBlanks).chars().filter(c -> c == '_').count();
             int pointsEarned = missingLetters * 2;
             guesser.setPoints(guesser.getPoints() + pointsEarned);
 
-            // optional config – remove one strike on correct guess
+            // NEW: remove one strike on correct guess if enabled
             if (removeStrikeOnCorrectGuess && strikes > 0) {
                 strikes--;
             }
@@ -560,8 +590,9 @@ public class GameRoom extends BaseGameRoom {
             // sync points to all clients
             clientsInRoom.values().forEach(c -> c.sendPoints(guesser.getClientId(), guesser.getPoints()));
 
-            relay(null, String.format("%s guessed the correct word %s and got %d points",
-                    guesser.getClientName(), currentWord, pointsEarned));
+            relay(null, String.format("%s guessed the correct word %s and got %d points%s",
+                    guesser.getClientName(), currentWord, pointsEarned,
+                    removeStrikeOnCorrectGuess && strikes > 0 ? " (and removed a strike!)" : ""));
 
             // reveal word and end round
             currentBlanks = currentWord.toCharArray();
@@ -570,8 +601,8 @@ public class GameRoom extends BaseGameRoom {
         } else {
             strikes++;
             syncBlanksAndStrikes();
-            relay(null, String.format("X %s guessed %s and it was wrong.", guesser.getClientName(), wordGuess));
-
+            relay(null, String.format("X %s guessed %s and it was wrong.",
+                    guesser.getClientName(), originalGuess));
             if (strikes >= MAX_STRIKES) {
                 onRoundEnd();
             } else {
@@ -588,16 +619,15 @@ public class GameRoom extends BaseGameRoom {
         }
 
         char letter = Character.toUpperCase(letterGuess.charAt(0));
+        SeverUser guesser = getOrCreateUser(guesserThread.getClientId());
+        if (guesser == null) {
+            guesserThread.sendMessage(Constants.DEFAULT_CLIENT_ID, "Player data unavailable");
+            onTurnEnd();
+            return;
+        }
 
-        // hard mode behavior when guessing a letter that's already been guessed
+        // Hard mode behavior - allow repeat guesses but treat as miss
         if (guessedLetters.contains(letter)) {
-            SeverUser guesser = getOrCreateUser(guesserThread.getClientId());
-            if (guesser == null) {
-                guesserThread.sendMessage(Constants.DEFAULT_CLIENT_ID, "Player data unavailable");
-                onTurnEnd();
-                return;
-            }
-
             if (hardMode) {
                 // In hard mode, allow repeats but treat as a miss (incurs a strike)
                 strikes++;
@@ -612,8 +642,12 @@ public class GameRoom extends BaseGameRoom {
                 }
             } else {
                 // Normal mode: block repeated guesses
-                guesserThread.sendMessage(Constants.DEFAULT_CLIENT_ID, "Letter already guessed: " + letter);
-                onTurnEnd();
+                guesserThread.sendMessage(Constants.DEFAULT_CLIENT_ID, 
+                    "Letter already guessed: " + letter);
+                // Don't end turn - let them guess again
+                guesserThread.setTookTurn(false); // Reset turn since it wasn't valid
+                sendTurnStatus(guesserThread, false);
+                return;
             }
             return;
         }
@@ -626,13 +660,6 @@ public class GameRoom extends BaseGameRoom {
                 currentBlanks[i] = letter;
                 matches++;
             }
-        }
-
-        SeverUser guesser = getOrCreateUser(guesserThread.getClientId());
-        if (guesser == null) {
-            guesserThread.sendMessage(Constants.DEFAULT_CLIENT_ID, "Player data unavailable");
-            onTurnEnd();
-            return;
         }
 
         if (matches > 0) {
