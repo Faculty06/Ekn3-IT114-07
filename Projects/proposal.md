@@ -22,4 +22,5 @@
 
 
 - Demo Link
-  - (add youtube link to unlisted or public demo) Note you'll need to verify your youtube account to upload videos > 15mins
+  -https://youtu.be/eFHJv71VnHU Full walkthrough link (updated version)
+  - https://youtu.be/QV02XrtaytM  (old Version)

@@ -62,6 +62,10 @@ public enum Client {
     private volatile GameStatePayload latestGameState = null;
     private volatile String lastTurnMessage = null;
     private volatile long currentTurnClientId = Constants.DEFAULT_CLIENT_ID;
+    
+    // Configuration flags received from server
+    private volatile boolean hardMode = false;
+    private volatile boolean removeStrikeOnCorrectGuess = false;
 
     // buffer of game-related messages (for Game Events panel)
     private final CopyOnWriteArrayList<String> gameEvents = new CopyOnWriteArrayList<>();
@@ -101,6 +105,14 @@ public enum Client {
 
     public long getCurrentTurnClientId() {
         return currentTurnClientId;
+    }
+    
+    public boolean isHardMode() {
+        return hardMode;
+    }
+    
+    public boolean isRemoveStrikeOnCorrectGuess() {
+        return removeStrikeOnCorrectGuess;
     }
 
     /**
@@ -662,9 +674,15 @@ public enum Client {
         if (payload instanceof GameStatePayload) {
             GameStatePayload gsp = (GameStatePayload) payload;
             latestGameState = gsp;
+            
+            // Update local config flags from server
+            hardMode = gsp.isHardMode();
+            removeStrikeOnCorrectGuess = gsp.isRemoveStrikeOnCorrectGuess();
+            
             LoggerUtil.INSTANCE.info(TextFX.colorize(
-                    String.format("HANGMAN: %s | Strikes: %d/%d",
-                            gsp.getHiddenWord(), gsp.getCurrentStrikes(), gsp.getMaxStrikes()),
+                    String.format("HANGMAN: %s | Strikes: %d/%d | Hard Mode: %s | Remove Strike on Correct: %s",
+                            gsp.getHiddenWord(), gsp.getCurrentStrikes(), gsp.getMaxStrikes(),
+                            hardMode, removeStrikeOnCorrectGuess),
                     Color.PURPLE));
         }
     }
@@ -721,6 +739,8 @@ public enum Client {
             latestGameState = null;
             lastTurnMessage = null;
             currentTurnClientId = Constants.DEFAULT_CLIENT_ID;
+            hardMode = false;
+            removeStrikeOnCorrectGuess = false;
             gameEvents.clear();
         }
     }
